@@ -12,7 +12,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-func WrapRDB(client *redis.Client) *redis.Client {
+func RedisTelemetry(client *redis.Client) *redis.Client {
 	client.AddHook(&otelRedisHook{
 		client: client,
 		tracer: otel.Tracer("redis"),

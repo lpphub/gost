@@ -19,7 +19,7 @@ type config struct {
 
 type Option func(*config)
 
-func WithServiceName(name string) Option {
+func WithService(name string) Option {
 	return func(c *config) { c.serviceName = name }
 }
 
@@ -51,6 +51,16 @@ func WithMetricsReader(reader ...metricsdk.Reader) Option {
 
 func WithSecure() Option {
 	return func(c *config) { c.insecure = false }
+}
+
+func WithPrometheus() Option {
+	return func(c *config) {
+		exp, err := initPrometheus()
+		if err != nil {
+			return
+		}
+		c.metricsReaders = append(c.metricsReaders, exp)
+	}
 }
 
 func defaultConfig() *config {

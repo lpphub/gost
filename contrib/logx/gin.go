@@ -30,7 +30,7 @@ func WithSkipPaths(paths ...string) TraceLogOption {
 	}
 }
 
-func GinTraceLog(opts ...TraceLogOption) gin.HandlerFunc {
+func GinRequestLog(opts ...TraceLogOption) gin.HandlerFunc {
 	cfg := defaultTraceLogConfig()
 	for _, opt := range opts {
 		opt(cfg)

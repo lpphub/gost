@@ -11,7 +11,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func WrapDB(db *gorm.DB) *gorm.DB {
+func DBTelemetry(db *gorm.DB) *gorm.DB {
 	tracer := otel.Tracer("gorm")
 	cb := db.Callback()
 

@@ -107,7 +107,7 @@ func TestInit_WithCustomMetricsReader(t *testing.T) {
 
 	reader := metricsdk.NewManualReader()
 	err := Init(
-		WithServiceName("test-svc"),
+		WithService("test-svc"),
 		WithMetricsReader(reader),
 	)
 
@@ -134,7 +134,7 @@ func TestShutdown_AfterInitWithMetrics(t *testing.T) {
 	meterProvider = nil
 
 	err := Init(
-		WithServiceName("shutdown-test"),
+		WithService("shutdown-test"),
 		WithMetricsReader(metricsdk.NewManualReader()),
 	)
 	require.NoError(t, err)
@@ -149,12 +149,12 @@ func TestShutdown_AfterInitWithMetrics(t *testing.T) {
 	assert.Nil(t, tracerProvider)
 }
 
-func TestInit_WithServiceName(t *testing.T) {
+func TestInit_WithService(t *testing.T) {
 	// Reset state
 	tracerProvider = nil
 	meterProvider = nil
 
-	err := Init(WithServiceName("my-service"))
+	err := Init(WithService("my-service"))
 	assert.NoError(t, err)
 
 	// Propagator should be set
@@ -168,7 +168,7 @@ func TestInit_WithTracesAndMetricsEnabled(t *testing.T) {
 
 	// Enable both signals but without endpoints — should not error
 	err := Init(
-		WithServiceName("both-test"),
+		WithService("both-test"),
 		WithTracesEnabled(true),
 		WithMetricsEnabled(true),
 	)
@@ -201,7 +201,7 @@ func TestInit_PreservesServiceNameInResource(t *testing.T) {
 	meterProvider = nil
 
 	err := Init(
-		WithServiceName("resource-test"),
+		WithService("resource-test"),
 		WithMetricsReader(metricsdk.NewManualReader()),
 	)
 	require.NoError(t, err)
