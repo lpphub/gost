@@ -8,20 +8,20 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-type traceLogConfig struct {
+type requestLogConfig struct {
 	skipPaths map[string]struct{}
 }
 
-type TraceLogOption func(*traceLogConfig)
+type RequestLogOption func(*requestLogConfig)
 
-func defaultTraceLogConfig() *traceLogConfig {
-	return &traceLogConfig{
+func defaultRequestLogConfig() *requestLogConfig {
+	return &requestLogConfig{
 		skipPaths: make(map[string]struct{}),
 	}
 }
 
-func WithSkipPaths(paths ...string) TraceLogOption {
-	return func(cfg *traceLogConfig) {
+func WithSkipPaths(paths ...string) RequestLogOption {
+	return func(cfg *requestLogConfig) {
 		for _, p := range paths {
 			if p != "" {
 				cfg.skipPaths[p] = struct{}{}
@@ -30,8 +30,8 @@ func WithSkipPaths(paths ...string) TraceLogOption {
 	}
 }
 
-func GinRequestLog(opts ...TraceLogOption) gin.HandlerFunc {
-	cfg := defaultTraceLogConfig()
+func GinRequestLog(opts ...RequestLogOption) gin.HandlerFunc {
+	cfg := defaultRequestLogConfig()
 	for _, opt := range opts {
 		opt(cfg)
 	}
