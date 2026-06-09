@@ -34,14 +34,14 @@ func Fail(ctx *gin.Context, err error) {
 	}
 
 	if bizErr, ok := errors.AsType[*Error](err); ok {
-		failWithBizError(ctx, bizErr)
+		failWithBizErr(ctx, bizErr)
 		return
 	}
 
 	fail(ctx, http.StatusInternalServerError, -1, err.Error())
 }
 
-func failWithBizError(ctx *gin.Context, err *Error) {
+func failWithBizErr(ctx *gin.Context, err *Error) {
 	status := err.HTTPStatus
 	if status == 0 {
 		status = http.StatusOK

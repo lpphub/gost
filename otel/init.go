@@ -3,7 +3,6 @@ package otel
 import (
 	"context"
 	"errors"
-	"sync"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
@@ -20,10 +19,9 @@ import (
 )
 
 var (
-	tracerProvider    *tracesdk.TracerProvider
-	meterProvider     *metricsdk.MeterProvider
-	mu                sync.Mutex
-	insecureDialOpts  = []grpc.DialOption{
+	tracerProvider   *tracesdk.TracerProvider
+	meterProvider    *metricsdk.MeterProvider
+	insecureDialOpts = []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	}
 )
@@ -123,9 +121,6 @@ func MeterProvider() otelmetric.MeterProvider {
 }
 
 func Shutdown(ctx context.Context) error {
-	mu.Lock()
-	defer mu.Unlock()
-
 	var errs []error
 
 	if tracerProvider != nil {
