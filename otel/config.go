@@ -53,16 +53,6 @@ func WithSecure() Option {
 	return func(c *config) { c.insecure = false }
 }
 
-func WithPrometheus() Option {
-	return func(c *config) {
-		exp, err := initPrometheus()
-		if err != nil {
-			return
-		}
-		c.metricsReaders = append(c.metricsReaders, exp)
-	}
-}
-
 func defaultConfig() *config {
 	return &config{
 		tracesEnabled:  false,

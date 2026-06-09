@@ -16,14 +16,11 @@ func GinTelemetry(serviceName string, opts ...otelgin.Option) gin.HandlerFunc {
 	return otelgin.Middleware(serviceName, append(defaults, opts...)...)
 }
 
-func RegisterMetricsEndpoint(r gin.IRouter, path string) {
-	handler := gotel.PrometheusHandler()
+// RegisterMetricsEndpoint registers a Prometheus metrics handler at the given path.
+// Pass promexp.Handler() as the handler if you're using the Prometheus pull exporter.
+func RegisterMetricsEndpoint(r gin.IRouter, path string, handler http.Handler) {
 	if handler == nil {
 		return
 	}
 	r.GET(path, gin.WrapH(handler))
-}
-
-func PrometheusHandler() http.Handler {
-	return gotel.PrometheusHandler()
 }
