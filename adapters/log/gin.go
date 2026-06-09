@@ -1,10 +1,10 @@
-package logx
+package log
 
 import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/lpphub/gost/logger"
+	glog "github.com/lpphub/gost/log"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -47,7 +47,7 @@ func GinRequestLog(opts ...RequestLogOption) gin.HandlerFunc {
 
 		span := trace.SpanFromContext(ctx)
 		if sc := span.SpanContext(); sc.IsValid() {
-			ctx = logger.WithTrace(ctx, sc.TraceID().String(), sc.SpanID().String())
+			ctx = glog.WithTrace(ctx, sc.TraceID().String(), sc.SpanID().String())
 		}
 
 		c.Request = c.Request.WithContext(ctx)
@@ -55,7 +55,7 @@ func GinRequestLog(opts ...RequestLogOption) gin.HandlerFunc {
 		start := time.Now()
 		c.Next()
 
-		logger.Ctx(ctx).
+		glog.Ctx(ctx).
 			Info().
 			Int("status", c.Writer.Status()).
 			Int64("latency_ms", time.Since(start).Milliseconds()).

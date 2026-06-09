@@ -1,23 +1,23 @@
-package otelx
+package otel
 
 import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/lpphub/gost/otel"
+	gotel "github.com/lpphub/gost/otel"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 )
 
 func GinTelemetry(serviceName string, opts ...otelgin.Option) gin.HandlerFunc {
 	defaults := []otelgin.Option{
-		otelgin.WithTracerProvider(otel.TracerProvider()),
-		otelgin.WithMeterProvider(otel.MeterProvider()),
+		otelgin.WithTracerProvider(gotel.TracerProvider()),
+		otelgin.WithMeterProvider(gotel.MeterProvider()),
 	}
 	return otelgin.Middleware(serviceName, append(defaults, opts...)...)
 }
 
 func RegisterMetricsEndpoint(r gin.IRouter, path string) {
-	handler := otel.PrometheusHandler()
+	handler := gotel.PrometheusHandler()
 	if handler == nil {
 		return
 	}
@@ -25,5 +25,5 @@ func RegisterMetricsEndpoint(r gin.IRouter, path string) {
 }
 
 func PrometheusHandler() http.Handler {
-	return otel.PrometheusHandler()
+	return gotel.PrometheusHandler()
 }

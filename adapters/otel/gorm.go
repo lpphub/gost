@@ -1,10 +1,10 @@
-package otelx
+package otel
 
 import (
 	"context"
 	"fmt"
 
-	"github.com/lpphub/gost/otel"
+	gotel "github.com/lpphub/gost/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -12,7 +12,7 @@ import (
 )
 
 func DBTelemetry(db *gorm.DB) *gorm.DB {
-	tracer := otel.Tracer("gorm")
+	tracer := gotel.Tracer("gorm")
 	cb := db.Callback()
 
 	cb.Create().Before("gorm:create").Register("otel:before_create", before(tracer, "CREATE"))

@@ -1,4 +1,4 @@
-package logx
+package log
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lpphub/gost/logger"
+	glog "github.com/lpphub/gost/log"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 )
@@ -52,11 +52,11 @@ func (l *GormLogger) logf(ctx context.Context, level gormlogger.LogLevel, msg st
 
 	switch level {
 	case gormlogger.Warn:
-		logger.Warnf(ctx, msg)
+		glog.Warnf(ctx, msg)
 	case gormlogger.Error:
-		logger.Errorf(ctx, msg)
+		glog.Errorf(ctx, msg)
 	default:
-		logger.Infof(ctx, msg)
+		glog.Infof(ctx, msg)
 	}
 }
 
@@ -72,19 +72,19 @@ func (l *GormLogger) Trace(ctx context.Context, begin time.Time, fc func() (stri
 		sql = sql[:l.sqlMaxLen] + " ...[truncated]"
 	}
 
-	fields := []logger.Field{
-		logger.Str("sql", sql),
-		logger.Int64("rows", rows),
-		logger.Dur("duration", elapsed),
+	fields := []glog.Field{
+		glog.Str("sql", sql),
+		glog.Int64("rows", rows),
+		glog.Dur("duration", elapsed),
 	}
 
 	switch {
 	case err != nil && !errors.Is(err, gorm.ErrRecordNotFound):
-		logger.Errorwf(ctx, fmt.Errorf("query error: %w", err), fields...)
+		glog.Errorwf(ctx, fmt.Errorf("query error: %w", err), fields...)
 	case l.slowThreshold > 0 && elapsed > l.slowThreshold:
-		logger.Warnf(ctx, "slow query", fields...)
+		glog.Warnf(ctx, "slow query", fields...)
 	default:
-		logger.Infof(ctx, "query success", fields...)
+		glog.Infof(ctx, "query success", fields...)
 	}
 }
 

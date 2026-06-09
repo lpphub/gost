@@ -1,4 +1,4 @@
-package logx
+package log
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lpphub/gost/logger"
+	glog "github.com/lpphub/gost/log"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -29,15 +29,15 @@ func (l *RedisLogger) DialHook(next redis.DialHook) redis.DialHook {
 		start := time.Now()
 		conn, err := next(ctx, network, addr)
 
-		fields := []logger.Field{
-			logger.Str("addr", addr),
-			logger.Dur("duration", time.Since(start)),
+		fields := []glog.Field{
+			glog.Str("addr", addr),
+			glog.Dur("duration", time.Since(start)),
 		}
 
 		if err != nil {
-			logger.Errorf(ctx, "redis connected failed", append(fields, logger.Err(err))...)
+			glog.Errorf(ctx, "redis connected failed", append(fields, glog.Err(err))...)
 		} else {
-			logger.Infof(ctx, "redis connected", fields...)
+			glog.Infof(ctx, "redis connected", fields...)
 		}
 		return conn, err
 	}
@@ -49,9 +49,9 @@ func (l *RedisLogger) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
 		err := next(ctx, cmd)
 		elapsed := time.Since(start)
 
-		fields := []logger.Field{
-			logger.Str("cmd", l.buildCmd(cmd)),
-			logger.Dur("duration", elapsed),
+		fields := []glog.Field{
+			glog.Str("cmd", l.buildCmd(cmd)),
+			glog.Dur("duration", elapsed),
 		}
 
 		l.logResult(ctx, fields, err, elapsed, "redis success", "redis slow", "redis error")
@@ -65,9 +65,9 @@ func (l *RedisLogger) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.
 		err := next(ctx, cmds)
 		elapsed := time.Since(start)
 
-		fields := []logger.Field{
-			logger.Str("cmd", l.buildPipelineCmd(cmds)),
-			logger.Dur("duration", elapsed),
+		fields := []glog.Field{
+			glog.Str("cmd", l.buildPipelineCmd(cmds)),
+			glog.Dur("duration", elapsed),
 		}
 
 		l.logResult(ctx, fields, err, elapsed, "redis pipeline success", "redis pipeline slow", "redis pipeline error")
@@ -75,14 +75,14 @@ func (l *RedisLogger) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.
 	}
 }
 
-func (l *RedisLogger) logResult(ctx context.Context, fields []logger.Field, err error, elapsed time.Duration, okMsg, slowMsg, errMsg string) {
+func (l *RedisLogger) logResult(ctx context.Context, fields []glog.Field, err error, elapsed time.Duration, okMsg, slowMsg, errMsg string) {
 	switch {
 	case err != nil && !errors.Is(err, redis.Nil):
-		logger.Errorf(ctx, errMsg, append(fields, logger.Err(err))...)
+		glog.Errorf(ctx, errMsg, append(fields, glog.Err(err))...)
 	case l.slowThreshold > 0 && elapsed > l.slowThreshold:
-		logger.Warnf(ctx, slowMsg, fields...)
+		glog.Warnf(ctx, slowMsg, fields...)
 	default:
-		logger.Infof(ctx, okMsg, fields...)
+		glog.Infof(ctx, okMsg, fields...)
 	}
 }
 

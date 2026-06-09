@@ -1,11 +1,11 @@
-package otelx
+package otel
 
 import (
 	"context"
 	"errors"
 	"fmt"
 
-	"github.com/lpphub/gost/otel"
+	gotel "github.com/lpphub/gost/otel"
 	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -15,7 +15,7 @@ import (
 func RedisTelemetry(client *redis.Client) *redis.Client {
 	client.AddHook(&otelRedisHook{
 		client: client,
-		tracer: otel.Tracer("redis"),
+		tracer: gotel.Tracer("redis"),
 	})
 	return client
 }
