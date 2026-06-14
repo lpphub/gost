@@ -19,8 +19,8 @@ Go 微服务工具包。
 
 | 模块 | 说明 |
 |------|------|
-| `adapters/log` | 日志适配器（Gin 中间件、GORM Logger、Redis Hook） |
-| `adapters/otel` | 追踪适配器（Gin 中间件、GORM/Redis 自动埋点） |
+| `adapter/log` | 日志适配器（Gin 中间件、GORM Logger、Redis Hook） |
+| `adapter/otel` | 追踪适配器（Gin 中间件、GORM/Redis 自动埋点） |
 
 ## 使用
 
@@ -34,8 +34,8 @@ import (
     "github.com/lpphub/gost/dbx"
     "github.com/lpphub/gost/httpx"
 
-    logadapt "github.com/lpphub/gost/adapters/log"
-    oteladapt "github.com/lpphub/gost/adapters/otel"
+    logadapt "github.com/lpphub/gost/adapter/log"
+    oteladapt "github.com/lpphub/gost/adapter/otel"
 )
 
 // 1. 加载配置（最前置）
