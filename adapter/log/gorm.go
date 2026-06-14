@@ -26,8 +26,9 @@ func NewGormLogger() gormlogger.Interface {
 }
 
 func (l *GormLogger) LogMode(level gormlogger.LogLevel) gormlogger.Interface {
-	l.logLevel = level
-	return l
+	cp := *l
+	cp.logLevel = level
+	return &cp
 }
 
 func (l *GormLogger) Info(ctx context.Context, msg string, data ...interface{}) {
@@ -68,9 +69,7 @@ func (l *GormLogger) Trace(ctx context.Context, begin time.Time, fc func() (stri
 	elapsed := time.Since(begin)
 	sql, rows := fc()
 
-	if len(sql) > l.sqlMaxLen {
-		sql = sql[:l.sqlMaxLen] + " ...[truncated]"
-	}
+	sql = truncate(sql, l.sqlMaxLen)
 
 	fields := []glog.Field{
 		glog.Str("sql", sql),

@@ -59,17 +59,25 @@ func fail(ctx *gin.Context, httpStatus int, code int, msg string) {
 
 func FailWithData(ctx *gin.Context, err error, data any) {
 	if bizErr, ok := errors.AsType[*Error](err); ok {
-		ctx.AbortWithStatusJSON(http.StatusOK, Result{
-			Code:    bizErr.Code,
-			Message: bizErr.Message,
-			Data:    data,
-		})
+		failWithBizErrData(ctx, bizErr, data)
 		return
 	}
 
 	ctx.AbortWithStatusJSON(http.StatusInternalServerError, Result{
 		Code:    -1,
 		Message: err.Error(),
+		Data:    data,
+	})
+}
+
+func failWithBizErrData(ctx *gin.Context, err *Error, data any) {
+	status := err.HTTPStatus
+	if status == 0 {
+		status = http.StatusOK
+	}
+	ctx.AbortWithStatusJSON(status, Result{
+		Code:    err.Code,
+		Message: err.Message,
 		Data:    data,
 	})
 }

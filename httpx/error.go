@@ -8,7 +8,7 @@ type Error struct {
 	HTTPStatus int
 }
 
-func (err *Error) Error() string { // 指针接收者
+func (err *Error) Error() string {
 	return err.Message
 }
 

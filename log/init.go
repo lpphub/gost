@@ -59,7 +59,7 @@ func Errorwf(ctx context.Context, err error, fields ...Field) {
 
 func applyFields(e *zerolog.Event, fields ...Field) *zerolog.Event {
 	for _, f := range fields {
-		f.ApplyEvent(e)
+		f(e)
 	}
 	return e
 }

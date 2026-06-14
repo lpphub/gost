@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 
@@ -96,13 +97,9 @@ func (l *RedisLogger) buildCmd(cmd redis.Cmder) string {
 		if i > 0 {
 			sb.WriteByte(' ')
 		}
-		fmt.Fprintf(&sb, "%v", arg)
+		fmt.Fprint(&sb, arg)
 	}
-	s := sb.String()
-	if len(s) > l.cmdMaxLen {
-		s = s[:l.cmdMaxLen] + " ...[truncated]"
-	}
-	return s
+	return truncate(sb.String(), l.cmdMaxLen)
 }
 
 func (l *RedisLogger) buildPipelineCmd(cmds []redis.Cmder) string {
@@ -115,14 +112,10 @@ func (l *RedisLogger) buildPipelineCmd(cmds []redis.Cmder) string {
 			sb.WriteString("; ")
 		}
 		if i >= 5 {
-			sb.WriteString(fmt.Sprintf("... (%d more)", len(cmds)-5))
+			sb.WriteString("... ("); sb.WriteString(strconv.Itoa(len(cmds)-5)); sb.WriteString(" more)")
 			break
 		}
 		sb.WriteString(l.buildCmd(cmd))
 	}
-	s := sb.String()
-	if len(s) > l.cmdMaxLen {
-		s = s[:l.cmdMaxLen] + " ...[truncated]"
-	}
-	return s
+	return truncate(sb.String(), l.cmdMaxLen)
 }

@@ -14,7 +14,8 @@ type Config struct {
 }
 
 type Manager struct {
-	cfg Config
+	cfg    Config
+	secret []byte
 }
 
 func NewManager(cfg Config) (*Manager, error) {
@@ -28,7 +29,7 @@ func NewManager(cfg Config) (*Manager, error) {
 		cfg.RefreshExpireSec = 604800
 	}
 
-	return &Manager{cfg: cfg}, nil
+	return &Manager{cfg: cfg, secret: []byte(cfg.Secret)}, nil
 }
 
 type TokenType string
@@ -50,22 +51,19 @@ type TokenPair struct {
 }
 
 func (m *Manager) generateToken(userID uint, tokenType TokenType, expireSeconds int64) (string, error) {
-	if len(m.cfg.Secret) == 0 {
-		return "", errors.New("JWT secret not configured")
-	}
-
+	now := time.Now()
 	claims := Claims{
 		UserID: userID,
 		Type:   tokenType,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(expireSeconds) * time.Second)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			NotBefore: jwt.NewNumericDate(time.Now()),
+			ExpiresAt: jwt.NewNumericDate(now.Add(time.Duration(expireSeconds) * time.Second)),
+			IssuedAt:  jwt.NewNumericDate(now),
+			NotBefore: jwt.NewNumericDate(now),
 		},
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(m.cfg.Secret))
+	return token.SignedString(m.secret)
 }
 
 func (m *Manager) GenerateToken(userID uint) (string, error) {
@@ -90,12 +88,8 @@ func (m *Manager) GenerateTokenPair(userID uint) (*TokenPair, error) {
 }
 
 func (m *Manager) ParseToken(tokenString string) (*Claims, error) {
-	if len(m.cfg.Secret) == 0 {
-		return nil, errors.New("JWT secret not configured")
-	}
-
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
-		return []byte(m.cfg.Secret), nil
+		return m.secret, nil
 	})
 
 	if err != nil {

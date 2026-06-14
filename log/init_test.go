@@ -20,10 +20,10 @@ func TestCtxInfo(t *testing.T) {
 	})
 
 	t.Run("WithCtx fields", func(t *testing.T) {
-		ctx := WithCtx(context.Background(), Str("requestId", "ABC123"))
+		ctx := WithCtx(context.Background(), CtxStr("requestId", "ABC123"))
 		Info(ctx, "with requestId")
 
-		ctx = WithCtx(ctx, Str("uid", "42"))
+		ctx = WithCtx(ctx, CtxStr("uid", "42"))
 		Info(ctx, "with requestId and uid")
 	})
 
@@ -34,12 +34,12 @@ func TestCtxInfo(t *testing.T) {
 
 	t.Run("WithTrace + WithCtx", func(t *testing.T) {
 		ctx := WithTrace(context.Background(), "trace123", "span456")
-		ctx = WithCtx(ctx, Str("uid", "42"))
+		ctx = WithCtx(ctx, CtxStr("uid", "42"))
 		Info(ctx, "with trace and field")
 	})
 
 	t.Run("native chain", func(t *testing.T) {
-		ctx := WithCtx(context.Background(), Str("key", "val"))
+		ctx := WithCtx(context.Background(), CtxStr("key", "val"))
 		Ctx(ctx).Info().Str("extra", "data").Msg("native chain")
 	})
 }

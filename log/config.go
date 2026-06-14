@@ -2,28 +2,33 @@ package log
 
 import (
 	"bufio"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
+	"strconv"
+	"sync"
 
 	"github.com/rs/zerolog"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 type (
-	Event  = zerolog.Event
-	Level  = zerolog.Level
+	Event = zerolog.Event
+	Level = zerolog.Level
 )
 
-var timeFormat = "2006-01-02 15:04:05.000Z07:00"
+var (
+	timeFormat = "2006-01-02 15:04:05.000Z07:00"
+	zlogOnce   sync.Once
+)
 
 func newZerolog(cfg *config) zerolog.Logger {
-	zerolog.TimeFieldFormat = timeFormat
-	zerolog.CallerMarshalFunc = callerShortFunc
+	zlogOnce.Do(func() {
+		zerolog.TimeFieldFormat = timeFormat
+		zerolog.CallerMarshalFunc = callerShortFunc
+	})
 
-	return zerolog.New(cfg.output).
+	return zerolog.New(cfg.writer()).
 		Level(cfg.level).
 		With().
 		Timestamp().
@@ -31,16 +36,16 @@ func newZerolog(cfg *config) zerolog.Logger {
 }
 
 type config struct {
-	level  Level
-	output io.Writer
+	level   Level
+	outputs []io.Writer
 }
 
 type Option func(*config)
 
 func defaultConfig() *config {
 	return &config{
-		level:  zerolog.InfoLevel,
-		output: os.Stdout,
+		level:   zerolog.InfoLevel,
+		outputs: []io.Writer{os.Stdout},
 	}
 }
 
@@ -50,13 +55,15 @@ func WithLevel(level Level) Option {
 	}
 }
 
-func WithOutput(w io.Writer) Option {
+// WithWriter appends a writer. Multiple writers are fanned out via io.MultiWriter.
+func WithWriter(w io.Writer) Option {
 	return func(c *config) {
-		c.output = w
+		c.outputs = append(c.outputs, w)
 	}
 }
 
-func WithOutputFile(path string) Option {
+// WithFileWriter appends a rotating file writer (lumberjack, 200MB/5 backups/14 days).
+func WithFileWriter(path string) Option {
 	return func(c *config) {
 		lj := &lumberjack.Logger{
 			Filename:   path,
@@ -65,15 +72,31 @@ func WithOutputFile(path string) Option {
 			MaxAge:     14,
 			Compress:   true,
 		}
-		c.output = bufio.NewWriter(lj)
+		c.outputs = append(c.outputs, bufio.NewWriter(lj))
 	}
+}
+
+func (c *config) writer() io.Writer {
+	if len(c.outputs) == 0 {
+		return os.Stdout
+	}
+	if len(c.outputs) == 1 {
+		return c.outputs[0]
+	}
+	return io.MultiWriter(c.outputs...)
 }
 
 func callerShortFunc(_ uintptr, file string, line int) string {
 	file = filepath.ToSlash(file)
-	parts := strings.Split(file, "/")
-	if len(parts) > 2 {
-		file = strings.Join(parts[len(parts)-2:], "/")
+	n := 2
+	for i := len(file) - 1; i >= 0; i-- {
+		if file[i] == '/' {
+			n--
+			if n == 0 {
+				file = file[i+1:]
+				break
+			}
+		}
 	}
-	return fmt.Sprintf("%s:%d", file, line)
+	return file + ":" + strconv.Itoa(line)
 }

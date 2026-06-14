@@ -16,16 +16,13 @@ func ensureCtx(ctx context.Context) context.Context {
 }
 
 func WithTrace(ctx context.Context, traceID, spanID string) context.Context {
-	ctx = ensureCtx(ctx)
 	if traceID == "" {
 		return ctx
 	}
-	l := *Ctx(ctx)
-	l = l.With().Str("trace_id", traceID).Str("span_id", spanID).Logger()
-	return context.WithValue(ctx, loggerKey{}, &l)
+	return WithCtx(ctx, CtxStr("trace_id", traceID), CtxStr("span_id", spanID))
 }
 
-func WithCtx(ctx context.Context, fields ...Field) context.Context {
+func WithCtx(ctx context.Context, fields ...CtxField) context.Context {
 	ctx = ensureCtx(ctx)
 	if len(fields) == 0 {
 		return ctx
@@ -33,7 +30,7 @@ func WithCtx(ctx context.Context, fields ...Field) context.Context {
 	l := *Ctx(ctx)
 	sub := l.With()
 	for _, f := range fields {
-		sub = f.ApplyCtx(sub)
+		sub = f(sub)
 	}
 	result := sub.Logger()
 	return context.WithValue(ctx, loggerKey{}, &result)

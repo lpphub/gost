@@ -31,7 +31,7 @@ func (h *otelRedisHook) DialHook(next redis.DialHook) redis.DialHook {
 
 func (h *otelRedisHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
 	return func(ctx context.Context, cmd redis.Cmder) error {
-		ctx, span := h.tracer.Start(ctx, fmt.Sprintf("redis.%s", cmd.Name()),
+		ctx, span := h.tracer.Start(ctx, "redis."+cmd.Name(),
 			trace.WithSpanKind(trace.SpanKindClient),
 			trace.WithAttributes(append(
 				h.baseAttrs(),
@@ -65,11 +65,11 @@ func (h *otelRedisHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redi
 }
 
 func (h *otelRedisHook) baseAttrs() []attribute.KeyValue {
-	return []attribute.KeyValue{
-		attribute.String("db.system", "redis"),
-		attribute.String("server.address", h.client.Options().Addr),
-		attribute.Int("db.redis.database_index", h.client.Options().DB),
-	}
+	attrs := make([]attribute.KeyValue, 3, 5)
+	attrs[0] = attribute.String("db.system", "redis")
+	attrs[1] = attribute.String("server.address", h.client.Options().Addr)
+	attrs[2] = attribute.Int("db.redis.database_index", h.client.Options().DB)
+	return attrs
 }
 
 func (h *otelRedisHook) recordError(span trace.Span, err error) {

@@ -2,7 +2,6 @@ package otel
 
 import (
 	"context"
-	"fmt"
 
 	gotel "github.com/lpphub/gost/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -46,7 +45,7 @@ func before(tracer trace.Tracer, operation string) func(*gorm.DB) {
 		if db.Statement.Schema != nil {
 			tableName = db.Statement.Schema.Table
 		}
-		spanName := fmt.Sprintf("%s %s", operation, tableName)
+		spanName := operation + " " + tableName
 
 		ctx, span := tracer.Start(ctx, spanName,
 			trace.WithSpanKind(trace.SpanKindClient),

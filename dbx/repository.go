@@ -20,7 +20,7 @@ func (r *BaseRepo[T]) DB() *gorm.DB {
 
 func (r *BaseRepo[T]) First(ctx context.Context, id uint) (*T, error) {
 	var entity T
-	if err := r.db.WithContext(ctx).First(&entity, id).Error; err != nil {
+	if err := TxAwareDB(ctx, r.db).First(&entity, id).Error; err != nil {
 		return nil, err
 	}
 	return &entity, nil
@@ -28,7 +28,7 @@ func (r *BaseRepo[T]) First(ctx context.Context, id uint) (*T, error) {
 
 func (r *BaseRepo[T]) FindByIDs(ctx context.Context, ids []uint) ([]T, error) {
 	var entities []T
-	if err := r.db.WithContext(ctx).Where("id IN ?", ids).Find(&entities).Error; err != nil {
+	if err := TxAwareDB(ctx, r.db).Where("id IN ?", ids).Find(&entities).Error; err != nil {
 		return nil, err
 	}
 	return entities, nil
@@ -36,7 +36,7 @@ func (r *BaseRepo[T]) FindByIDs(ctx context.Context, ids []uint) ([]T, error) {
 
 func (r *BaseRepo[T]) FindAll(ctx context.Context) ([]T, error) {
 	var entities []T
-	if err := r.db.WithContext(ctx).Find(&entities).Error; err != nil {
+	if err := TxAwareDB(ctx, r.db).Find(&entities).Error; err != nil {
 		return nil, err
 	}
 	return entities, nil
