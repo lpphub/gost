@@ -48,7 +48,7 @@ func (l *RedisLogger) DialHook(next redis.DialHook) redis.DialHook {
 
 		fields := []glog.Field{
 			glog.Str("addr", addr),
-			glog.Dur("duration", time.Since(start)),
+			glog.Int64("cost", time.Since(start).Milliseconds()),
 		}
 
 		if err != nil {
@@ -68,7 +68,7 @@ func (l *RedisLogger) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
 
 		fields := []glog.Field{
 			glog.Str("cmd", l.buildCmd(cmd)),
-			glog.Dur("duration", elapsed),
+			glog.Int64("cost", elapsed.Milliseconds()),
 		}
 
 		l.logResult(ctx, fields, err, elapsed, "redis success", "redis slow", "redis error")
@@ -84,7 +84,7 @@ func (l *RedisLogger) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.
 
 		fields := []glog.Field{
 			glog.Str("cmd", l.buildPipelineCmd(cmds)),
-			glog.Dur("duration", elapsed),
+			glog.Int64("cost", elapsed.Milliseconds()),
 		}
 
 		l.logResult(ctx, fields, err, elapsed, "redis pipeline success", "redis pipeline slow", "redis pipeline error")

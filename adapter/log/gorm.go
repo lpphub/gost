@@ -90,7 +90,7 @@ func (l *GormLogger) Trace(ctx context.Context, begin time.Time, fc func() (stri
 	fields := []glog.Field{
 		glog.Str("sql", sql),
 		glog.Int64("rows", rows),
-		glog.Dur("duration", elapsed),
+		glog.Int64("cost", elapsed.Milliseconds()),
 	}
 
 	switch {
