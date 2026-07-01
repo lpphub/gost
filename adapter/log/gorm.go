@@ -11,18 +11,34 @@ import (
 	gormlogger "gorm.io/gorm/logger"
 )
 
+const defaultGormCallerSkip = 5
+
 type GormLogger struct {
 	logLevel      gormlogger.LogLevel
 	slowThreshold time.Duration
 	sqlMaxLen     int
+	callerSkip    int
 }
 
-func NewGormLogger() gormlogger.Interface {
-	return &GormLogger{
+type GormLoggerOption func(*GormLogger)
+
+func WithCallerSkip(skip int) GormLoggerOption {
+	return func(l *GormLogger) {
+		l.callerSkip = skip
+	}
+}
+
+func NewGormLogger(opts ...GormLoggerOption) gormlogger.Interface {
+	l := &GormLogger{
 		logLevel:      gormlogger.Info,
 		slowThreshold: 1000 * time.Millisecond,
 		sqlMaxLen:     1024,
+		callerSkip:    defaultGormCallerSkip,
 	}
+	for _, opt := range opts {
+		opt(l)
+	}
+	return l
 }
 
 func (l *GormLogger) LogMode(level gormlogger.LogLevel) gormlogger.Interface {
@@ -53,11 +69,11 @@ func (l *GormLogger) logf(ctx context.Context, level gormlogger.LogLevel, msg st
 
 	switch level {
 	case gormlogger.Warn:
-		glog.Warnf(ctx, msg)
+		glog.WarnwDepth(ctx, l.callerSkip, msg)
 	case gormlogger.Error:
-		glog.Errorf(ctx, msg)
+		glog.ErrorwDepth(ctx, l.callerSkip, msg)
 	default:
-		glog.Infof(ctx, msg)
+		glog.InfowDepth(ctx, l.callerSkip, msg)
 	}
 }
 
@@ -79,11 +95,10 @@ func (l *GormLogger) Trace(ctx context.Context, begin time.Time, fc func() (stri
 
 	switch {
 	case err != nil && !errors.Is(err, gorm.ErrRecordNotFound):
-		glog.Errorwf(ctx, fmt.Errorf("query error: %w", err), fields...)
+		glog.ErrorwfDepth(ctx, l.callerSkip, fmt.Errorf("query error: %w", err), fields...)
 	case l.slowThreshold > 0 && elapsed > l.slowThreshold:
-		glog.Warnf(ctx, "slow query", fields...)
+		glog.WarnwDepth(ctx, l.callerSkip, "slow query", fields...)
 	default:
-		glog.Infof(ctx, "query success", fields...)
+		glog.InfowDepth(ctx, l.callerSkip, "sql done", fields...)
 	}
 }
-

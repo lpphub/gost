@@ -13,16 +13,32 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+const defaultRedisCallerSkip = 4
+
 type RedisLogger struct {
 	slowThreshold time.Duration
 	cmdMaxLen     int
+	callerSkip    int
 }
 
-func NewRedisLogger() *RedisLogger {
-	return &RedisLogger{
+type RedisLoggerOption func(*RedisLogger)
+
+func WithRedisCallerSkip(skip int) RedisLoggerOption {
+	return func(l *RedisLogger) {
+		l.callerSkip = skip
+	}
+}
+
+func NewRedisLogger(opts ...RedisLoggerOption) *RedisLogger {
+	l := &RedisLogger{
 		slowThreshold: 100 * time.Millisecond,
 		cmdMaxLen:     1024,
+		callerSkip:    defaultRedisCallerSkip,
 	}
+	for _, opt := range opts {
+		opt(l)
+	}
+	return l
 }
 
 func (l *RedisLogger) DialHook(next redis.DialHook) redis.DialHook {
@@ -36,9 +52,9 @@ func (l *RedisLogger) DialHook(next redis.DialHook) redis.DialHook {
 		}
 
 		if err != nil {
-			glog.Errorf(ctx, "redis connected failed", append(fields, glog.Err(err))...)
+			glog.ErrorwDepth(ctx, l.callerSkip, "redis connected failed", append(fields, glog.Err(err))...)
 		} else {
-			glog.Infof(ctx, "redis connected", fields...)
+			glog.InfowDepth(ctx, l.callerSkip, "redis connected", fields...)
 		}
 		return conn, err
 	}
@@ -79,11 +95,11 @@ func (l *RedisLogger) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.
 func (l *RedisLogger) logResult(ctx context.Context, fields []glog.Field, err error, elapsed time.Duration, okMsg, slowMsg, errMsg string) {
 	switch {
 	case err != nil && !errors.Is(err, redis.Nil):
-		glog.Errorf(ctx, errMsg, append(fields, glog.Err(err))...)
+		glog.ErrorwDepth(ctx, l.callerSkip, errMsg, append(fields, glog.Err(err))...)
 	case l.slowThreshold > 0 && elapsed > l.slowThreshold:
-		glog.Warnf(ctx, slowMsg, fields...)
+		glog.WarnwDepth(ctx, l.callerSkip, slowMsg, fields...)
 	default:
-		glog.Infof(ctx, okMsg, fields...)
+		glog.InfowDepth(ctx, l.callerSkip, okMsg, fields...)
 	}
 }
 
