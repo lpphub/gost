@@ -8,11 +8,11 @@ import (
 
 	glog "github.com/lpphub/gost/log"
 	"gorm.io/gorm"
-	gormlogger "gorm.io/gorm/logger"
+	gmlog "gorm.io/gorm/logger"
 )
 
 type GormLogCfg struct {
-	LogLevel      gormlogger.LogLevel
+	LogLevel      gmlog.LogLevel
 	SlowThreshold time.Duration
 	SQLMaxLen     int
 	CallerSkip    int
@@ -22,9 +22,9 @@ type GormLogger struct {
 	cfg GormLogCfg
 }
 
-func NewGormLogger(cfg GormLogCfg) gormlogger.Interface {
+func NewGormLogger(cfg GormLogCfg) gmlog.Interface {
 	if cfg.LogLevel == 0 {
-		cfg.LogLevel = gormlogger.Info
+		cfg.LogLevel = gmlog.Info
 	}
 	if cfg.CallerSkip == 0 {
 		cfg.CallerSkip = 3
@@ -38,14 +38,14 @@ func NewGormLogger(cfg GormLogCfg) gormlogger.Interface {
 	return &GormLogger{cfg: cfg}
 }
 
-func (l *GormLogger) LogMode(level gormlogger.LogLevel) gormlogger.Interface {
+func (l *GormLogger) LogMode(level gmlog.LogLevel) gmlog.Interface {
 	cp := *l
 	cp.cfg.LogLevel = level
 	return &cp
 }
 
 func (l *GormLogger) Info(ctx context.Context, msg string, data ...interface{}) {
-	if l.cfg.LogLevel < gormlogger.Info {
+	if l.cfg.LogLevel < gmlog.Info {
 		return
 	}
 	if len(data) > 0 {
@@ -55,7 +55,7 @@ func (l *GormLogger) Info(ctx context.Context, msg string, data ...interface{}) 
 }
 
 func (l *GormLogger) Warn(ctx context.Context, msg string, data ...interface{}) {
-	if l.cfg.LogLevel < gormlogger.Warn {
+	if l.cfg.LogLevel < gmlog.Warn {
 		return
 	}
 	if len(data) > 0 {
@@ -65,7 +65,7 @@ func (l *GormLogger) Warn(ctx context.Context, msg string, data ...interface{}) 
 }
 
 func (l *GormLogger) Error(ctx context.Context, msg string, data ...interface{}) {
-	if l.cfg.LogLevel < gormlogger.Error {
+	if l.cfg.LogLevel < gmlog.Error {
 		return
 	}
 	if len(data) > 0 {
@@ -75,7 +75,7 @@ func (l *GormLogger) Error(ctx context.Context, msg string, data ...interface{})
 }
 
 func (l *GormLogger) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {
-	if l.cfg.LogLevel <= gormlogger.Silent {
+	if l.cfg.LogLevel <= gmlog.Silent {
 		return
 	}
 
