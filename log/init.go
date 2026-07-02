@@ -1,15 +1,10 @@
 package log
 
 import (
-	"os"
-
 	"github.com/rs/zerolog"
 )
 
-var std = func() *zerolog.Logger {
-	l := zerolog.New(os.Stdout).With().Timestamp().Logger()
-	return &l
-}()
+var std *zerolog.Logger
 
 func Init(opts ...Option) {
 	cfg := defaultConfig()
@@ -18,8 +13,13 @@ func Init(opts ...Option) {
 	}
 	l := newZerolog(cfg)
 	std = &l
+	zerolog.DefaultContextLogger = std
 }
 
 func L() *zerolog.Logger {
+	if std == nil {
+		l := zerolog.Nop()
+		return &l
+	}
 	return std
 }

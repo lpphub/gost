@@ -13,48 +13,40 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-const defaultRedisCallerSkip = 4
+type RedisLogCfg struct {
+	SlowThreshold time.Duration
+	CmdMaxLen     int
+	CallerSkip    int
+}
 
 type RedisLogger struct {
-	slowThreshold time.Duration
-	cmdMaxLen     int
-	callerSkip    int
+	cfg RedisLogCfg
 }
 
-type RedisLoggerOption func(*RedisLogger)
-
-func WithRedisCallerSkip(skip int) RedisLoggerOption {
-	return func(l *RedisLogger) {
-		l.callerSkip = skip
+func NewRedisLogger(cfg RedisLogCfg) *RedisLogger {
+	if cfg.SlowThreshold == 0 {
+		cfg.SlowThreshold = 100 * time.Millisecond
 	}
-}
-
-func NewRedisLogger(opts ...RedisLoggerOption) *RedisLogger {
-	l := &RedisLogger{
-		slowThreshold: 100 * time.Millisecond,
-		cmdMaxLen:     1024,
-		callerSkip:    defaultRedisCallerSkip,
+	if cfg.CmdMaxLen == 0 {
+		cfg.CmdMaxLen = 1024
 	}
-	for _, opt := range opts {
-		opt(l)
-	}
-	return l
+	return &RedisLogger{cfg: cfg}
 }
 
 func (l *RedisLogger) DialHook(next redis.DialHook) redis.DialHook {
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
 		start := time.Now()
 		conn, err := next(ctx, network, addr)
-
-		fields := []glog.Field{
-			glog.Str("addr", addr),
-			glog.Int64("cost", time.Since(start).Milliseconds()),
-		}
+		cost := time.Since(start).Milliseconds()
 
 		if err != nil {
-			glog.ErrorwDepth(ctx, l.callerSkip, "redis connected failed", append(fields, glog.Err(err))...)
+			glog.Ctx(ctx).Error().Err(err).
+				Str("addr", addr).Int64("cost", cost).
+				Caller(l.cfg.CallerSkip).Msg("redis connected failed")
 		} else {
-			glog.InfowDepth(ctx, l.callerSkip, "redis connected", fields...)
+			glog.Ctx(ctx).Info().
+				Str("addr", addr).Int64("cost", cost).
+				Caller(l.cfg.CallerSkip).Msg("redis connected")
 		}
 		return conn, err
 	}
@@ -66,12 +58,7 @@ func (l *RedisLogger) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
 		err := next(ctx, cmd)
 		elapsed := time.Since(start)
 
-		fields := []glog.Field{
-			glog.Str("cmd", l.buildCmd(cmd)),
-			glog.Int64("cost", elapsed.Milliseconds()),
-		}
-
-		l.logResult(ctx, fields, err, elapsed, "redis success", "redis slow", "redis error")
+		l.logResult(ctx, err, elapsed, l.buildCmd(cmd), "redis success", "redis slow", "redis error")
 		return err
 	}
 }
@@ -82,24 +69,25 @@ func (l *RedisLogger) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.
 		err := next(ctx, cmds)
 		elapsed := time.Since(start)
 
-		fields := []glog.Field{
-			glog.Str("cmd", l.buildPipelineCmd(cmds)),
-			glog.Int64("cost", elapsed.Milliseconds()),
-		}
-
-		l.logResult(ctx, fields, err, elapsed, "redis pipeline success", "redis pipeline slow", "redis pipeline error")
+		l.logResult(ctx, err, elapsed, l.buildPipelineCmd(cmds), "redis pipeline success", "redis pipeline slow", "redis pipeline error")
 		return err
 	}
 }
 
-func (l *RedisLogger) logResult(ctx context.Context, fields []glog.Field, err error, elapsed time.Duration, okMsg, slowMsg, errMsg string) {
+func (l *RedisLogger) logResult(ctx context.Context, err error, elapsed time.Duration, cmd, okMsg, slowMsg, errMsg string) {
 	switch {
 	case err != nil && !errors.Is(err, redis.Nil):
-		glog.ErrorwDepth(ctx, l.callerSkip, errMsg, append(fields, glog.Err(err))...)
-	case l.slowThreshold > 0 && elapsed > l.slowThreshold:
-		glog.WarnwDepth(ctx, l.callerSkip, slowMsg, fields...)
+		glog.Ctx(ctx).Error().Err(err).
+			Str("cmd", cmd).Int64("cost", elapsed.Milliseconds()).
+			Caller(l.cfg.CallerSkip).Msg(errMsg)
+	case l.cfg.SlowThreshold > 0 && elapsed > l.cfg.SlowThreshold:
+		glog.Ctx(ctx).Warn().
+			Str("cmd", cmd).Int64("cost", elapsed.Milliseconds()).
+			Caller(l.cfg.CallerSkip).Msg(slowMsg)
 	default:
-		glog.InfowDepth(ctx, l.callerSkip, okMsg, fields...)
+		glog.Ctx(ctx).Info().
+			Str("cmd", cmd).Int64("cost", elapsed.Milliseconds()).
+			Caller(l.cfg.CallerSkip).Msg(okMsg)
 	}
 }
 
@@ -115,7 +103,7 @@ func (l *RedisLogger) buildCmd(cmd redis.Cmder) string {
 		}
 		fmt.Fprint(&sb, arg)
 	}
-	return truncate(sb.String(), l.cmdMaxLen)
+	return truncate(sb.String(), l.cfg.CmdMaxLen)
 }
 
 func (l *RedisLogger) buildPipelineCmd(cmds []redis.Cmder) string {
@@ -128,10 +116,12 @@ func (l *RedisLogger) buildPipelineCmd(cmds []redis.Cmder) string {
 			sb.WriteString("; ")
 		}
 		if i >= 5 {
-			sb.WriteString("... ("); sb.WriteString(strconv.Itoa(len(cmds)-5)); sb.WriteString(" more)")
+			sb.WriteString("... (")
+			sb.WriteString(strconv.Itoa(len(cmds) - 5))
+			sb.WriteString(" more)")
 			break
 		}
 		sb.WriteString(l.buildCmd(cmd))
 	}
-	return truncate(sb.String(), l.cmdMaxLen)
+	return truncate(sb.String(), l.cfg.CmdMaxLen)
 }

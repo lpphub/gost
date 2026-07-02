@@ -32,6 +32,7 @@ func newZerolog(cfg *config) zerolog.Logger {
 		Level(cfg.level).
 		With().
 		Timestamp().
+		Caller().
 		Logger()
 }
 
@@ -55,14 +56,12 @@ func WithLevel(level Level) Option {
 	}
 }
 
-// WithWriter appends a writer. Multiple writers are fanned out via io.MultiWriter.
 func WithWriter(w io.Writer) Option {
 	return func(c *config) {
 		c.outputs = append(c.outputs, w)
 	}
 }
 
-// WithFileWriter appends a rotating file writer (lumberjack, 200MB/5 backups/14 days).
 func WithFileWriter(path string) Option {
 	return func(c *config) {
 		lj := &lumberjack.Logger{
