@@ -23,6 +23,12 @@ type GormLogger struct {
 }
 
 func NewGormLogger(cfg GormLogCfg) gormlogger.Interface {
+	if cfg.LogLevel == 0 {
+		cfg.LogLevel = gormlogger.Info
+	}
+	if cfg.CallerSkip == 0 {
+		cfg.CallerSkip = 3
+	}
 	if cfg.SlowThreshold == 0 {
 		cfg.SlowThreshold = 2000 * time.Millisecond
 	}
@@ -45,7 +51,7 @@ func (l *GormLogger) Info(ctx context.Context, msg string, data ...interface{}) 
 	if len(data) > 0 {
 		msg = fmt.Sprintf(msg, data...)
 	}
-	glog.Ctx(ctx).Info().Caller(l.cfg.CallerSkip).Msg(msg)
+	glog.Ctx(ctx).Info().CallerSkipFrame(l.cfg.CallerSkip).Msg(msg)
 }
 
 func (l *GormLogger) Warn(ctx context.Context, msg string, data ...interface{}) {
@@ -55,7 +61,7 @@ func (l *GormLogger) Warn(ctx context.Context, msg string, data ...interface{}) 
 	if len(data) > 0 {
 		msg = fmt.Sprintf(msg, data...)
 	}
-	glog.Ctx(ctx).Warn().Caller(l.cfg.CallerSkip).Msg(msg)
+	glog.Ctx(ctx).Warn().CallerSkipFrame(l.cfg.CallerSkip).Msg(msg)
 }
 
 func (l *GormLogger) Error(ctx context.Context, msg string, data ...interface{}) {
@@ -65,7 +71,7 @@ func (l *GormLogger) Error(ctx context.Context, msg string, data ...interface{})
 	if len(data) > 0 {
 		msg = fmt.Sprintf(msg, data...)
 	}
-	glog.Ctx(ctx).Error().Caller(l.cfg.CallerSkip).Msg(msg)
+	glog.Ctx(ctx).Error().CallerSkipFrame(l.cfg.CallerSkip).Msg(msg)
 }
 
 func (l *GormLogger) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {
@@ -81,14 +87,14 @@ func (l *GormLogger) Trace(ctx context.Context, begin time.Time, fc func() (stri
 	case err != nil && !errors.Is(err, gorm.ErrRecordNotFound):
 		glog.Ctx(ctx).Error().Err(fmt.Errorf("query error: %w", err)).
 			Str("sql", sql).Int64("rows", rows).Int64("cost", elapsed.Milliseconds()).
-			Caller(l.cfg.CallerSkip).Msg("error")
+			CallerSkipFrame(l.cfg.CallerSkip).Msg("error")
 	case l.cfg.SlowThreshold > 0 && elapsed > l.cfg.SlowThreshold:
 		glog.Ctx(ctx).Warn().
 			Str("sql", sql).Int64("rows", rows).Int64("cost", elapsed.Milliseconds()).
-			Caller(l.cfg.CallerSkip).Msg("slow query")
+			CallerSkipFrame(l.cfg.CallerSkip).Msg("slow query")
 	default:
 		glog.Ctx(ctx).Info().
 			Str("sql", sql).Int64("rows", rows).Int64("cost", elapsed.Milliseconds()).
-			Caller(l.cfg.CallerSkip).Msg("sql done")
+			CallerSkipFrame(l.cfg.CallerSkip).Msg("sql done")
 	}
 }

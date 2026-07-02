@@ -11,9 +11,11 @@ import (
 
 	glog "github.com/lpphub/gost/log"
 	"github.com/redis/go-redis/v9"
+	"github.com/rs/zerolog"
 )
 
 type RedisLogCfg struct {
+	LogLevel      zerolog.Level
 	SlowThreshold time.Duration
 	CmdMaxLen     int
 	CallerSkip    int
@@ -24,6 +26,12 @@ type RedisLogger struct {
 }
 
 func NewRedisLogger(cfg RedisLogCfg) *RedisLogger {
+	if cfg.LogLevel == 0 {
+		cfg.LogLevel = zerolog.InfoLevel
+	}
+	if cfg.CallerSkip == 0 {
+		cfg.CallerSkip = 2
+	}
 	if cfg.SlowThreshold == 0 {
 		cfg.SlowThreshold = 100 * time.Millisecond
 	}
@@ -40,13 +48,15 @@ func (l *RedisLogger) DialHook(next redis.DialHook) redis.DialHook {
 		cost := time.Since(start).Milliseconds()
 
 		if err != nil {
-			glog.Ctx(ctx).Error().Err(err).
-				Str("addr", addr).Int64("cost", cost).
-				Caller(l.cfg.CallerSkip).Msg("redis connected failed")
-		} else {
+			if l.cfg.LogLevel >= zerolog.ErrorLevel {
+				glog.Ctx(ctx).Error().Err(err).
+					Str("addr", addr).Int64("cost", cost).
+					CallerSkipFrame(l.cfg.CallerSkip).Msg("redis connected failed")
+			}
+		} else if l.cfg.LogLevel >= zerolog.InfoLevel {
 			glog.Ctx(ctx).Info().
 				Str("addr", addr).Int64("cost", cost).
-				Caller(l.cfg.CallerSkip).Msg("redis connected")
+				CallerSkipFrame(l.cfg.CallerSkip).Msg("redis connected")
 		}
 		return conn, err
 	}
@@ -77,17 +87,23 @@ func (l *RedisLogger) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.
 func (l *RedisLogger) logResult(ctx context.Context, err error, elapsed time.Duration, cmd, okMsg, slowMsg, errMsg string) {
 	switch {
 	case err != nil && !errors.Is(err, redis.Nil):
-		glog.Ctx(ctx).Error().Err(err).
-			Str("cmd", cmd).Int64("cost", elapsed.Milliseconds()).
-			Caller(l.cfg.CallerSkip).Msg(errMsg)
+		if l.cfg.LogLevel >= zerolog.ErrorLevel {
+			glog.Ctx(ctx).Error().Err(err).
+				Str("cmd", cmd).Int64("cost", elapsed.Milliseconds()).
+				CallerSkipFrame(l.cfg.CallerSkip).Msg(errMsg)
+		}
 	case l.cfg.SlowThreshold > 0 && elapsed > l.cfg.SlowThreshold:
-		glog.Ctx(ctx).Warn().
-			Str("cmd", cmd).Int64("cost", elapsed.Milliseconds()).
-			Caller(l.cfg.CallerSkip).Msg(slowMsg)
+		if l.cfg.LogLevel >= zerolog.WarnLevel {
+			glog.Ctx(ctx).Warn().
+				Str("cmd", cmd).Int64("cost", elapsed.Milliseconds()).
+				CallerSkipFrame(l.cfg.CallerSkip).Msg(slowMsg)
+		}
 	default:
-		glog.Ctx(ctx).Info().
-			Str("cmd", cmd).Int64("cost", elapsed.Milliseconds()).
-			Caller(l.cfg.CallerSkip).Msg(okMsg)
+		if l.cfg.LogLevel >= zerolog.InfoLevel {
+			glog.Ctx(ctx).Info().
+				Str("cmd", cmd).Int64("cost", elapsed.Milliseconds()).
+				CallerSkipFrame(l.cfg.CallerSkip).Msg(okMsg)
+		}
 	}
 }
 
