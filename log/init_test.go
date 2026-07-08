@@ -24,7 +24,7 @@ func TestCtxInfo(t *testing.T) {
 	t.Run("WithTrace", func(t *testing.T) {
 		buf.Reset()
 		ctx := WithTrace(context.Background(), "trace123", "span456")
-		Ctx(ctx).Info().Msg("with trace")
+		Ctx(ctx).Info().Caller().Msg("with trace")
 		out := buf.String()
 		if !strings.Contains(out, `"trace_id":"trace123"`) {
 			t.Error("expected trace_id in output")
@@ -33,15 +33,4 @@ func TestCtxInfo(t *testing.T) {
 			t.Error("expected span_id in output")
 		}
 	})
-
-	t.Run("Caller", func(t *testing.T) {
-		buf.Reset()
-		Ctx(context.Background()).Info().Msg("with caller")
-		out := buf.String()
-		if !strings.Contains(out, `"caller":"log/init_test.go:`) {
-			t.Error("expected caller file:line in output, got:", out)
-		}
-	})
-
-
 }

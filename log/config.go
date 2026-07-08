@@ -29,11 +29,7 @@ func newZerolog(cfg *config) zerolog.Logger {
 	})
 
 	return zerolog.New(cfg.writer()).
-		Level(cfg.level).
-		With().
-		Timestamp().
-		Caller().
-		Logger()
+		Level(cfg.level).With().Timestamp().Logger()
 }
 
 type config struct {
