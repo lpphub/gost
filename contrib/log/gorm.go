@@ -39,21 +39,21 @@ func (l *GormLogger) Info(ctx context.Context, msg string, data ...interface{}) 
 	if len(data) > 0 {
 		msg = fmt.Sprintf(msg, data...)
 	}
-	addCaller(glog.Ctx(ctx).Info(), l.cfg.CallerSkip).Msg(msg)
+	withCaller(glog.Ctx(ctx).Info(), l.cfg.CallerSkip).Msg(msg)
 }
 
 func (l *GormLogger) Warn(ctx context.Context, msg string, data ...interface{}) {
 	if len(data) > 0 {
 		msg = fmt.Sprintf(msg, data...)
 	}
-	addCaller(glog.Ctx(ctx).Warn(), l.cfg.CallerSkip).Msg(msg)
+	withCaller(glog.Ctx(ctx).Warn(), l.cfg.CallerSkip).Msg(msg)
 }
 
 func (l *GormLogger) Error(ctx context.Context, msg string, data ...interface{}) {
 	if len(data) > 0 {
 		msg = fmt.Sprintf(msg, data...)
 	}
-	addCaller(glog.Ctx(ctx).Error(), l.cfg.CallerSkip).Msg(msg)
+	withCaller(glog.Ctx(ctx).Error(), l.cfg.CallerSkip).Msg(msg)
 }
 
 func (l *GormLogger) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {
@@ -63,15 +63,15 @@ func (l *GormLogger) Trace(ctx context.Context, begin time.Time, fc func() (stri
 
 	switch {
 	case err != nil && !errors.Is(err, gorm.ErrRecordNotFound):
-		addCaller(glog.Ctx(ctx).Error().Err(fmt.Errorf("query error: %w", err)).
+		withCaller(glog.Ctx(ctx).Error().Err(fmt.Errorf("query error: %w", err)).
 			Str("sql", sql).Int64("rows", rows).Int64("cost", elapsed.Milliseconds()),
 			l.cfg.CallerSkip).Msg("error")
 	case l.cfg.SlowThreshold > 0 && elapsed > l.cfg.SlowThreshold:
-		addCaller(glog.Ctx(ctx).Warn().
+		withCaller(glog.Ctx(ctx).Warn().
 			Str("sql", sql).Int64("rows", rows).Int64("cost", elapsed.Milliseconds()),
 			l.cfg.CallerSkip).Msg("slow query")
 	default:
-		addCaller(glog.Ctx(ctx).Info().
+		withCaller(glog.Ctx(ctx).Info().
 			Str("sql", sql).Int64("rows", rows).Int64("cost", elapsed.Milliseconds()),
 			l.cfg.CallerSkip).Msg("sql done")
 	}

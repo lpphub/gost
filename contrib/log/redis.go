@@ -40,11 +40,11 @@ func (l *RedisLogger) DialHook(next redis.DialHook) redis.DialHook {
 		cost := time.Since(start).Milliseconds()
 
 		if err != nil {
-			addCaller(glog.Ctx(ctx).Error().Err(err).
+			withCaller(glog.Ctx(ctx).Error().Err(err).
 				Str("addr", addr).Int64("cost", cost),
 				l.cfg.CallerSkip).Msg("redis connected failed")
 		} else {
-			addCaller(glog.Ctx(ctx).Info().
+			withCaller(glog.Ctx(ctx).Info().
 				Str("addr", addr).Int64("cost", cost),
 				l.cfg.CallerSkip).Msg("redis connected")
 		}
@@ -77,15 +77,15 @@ func (l *RedisLogger) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.
 func (l *RedisLogger) logResult(ctx context.Context, err error, elapsed time.Duration, cmd, okMsg, slowMsg, errMsg string) {
 	switch {
 	case err != nil && !errors.Is(err, redis.Nil):
-		addCaller(glog.Ctx(ctx).Error().Err(err).
+		withCaller(glog.Ctx(ctx).Error().Err(err).
 			Str("cmd", cmd).Int64("cost", elapsed.Milliseconds()),
 			l.cfg.CallerSkip).Msg(errMsg)
 	case l.cfg.SlowThreshold > 0 && elapsed > l.cfg.SlowThreshold:
-		addCaller(glog.Ctx(ctx).Warn().
+		withCaller(glog.Ctx(ctx).Warn().
 			Str("cmd", cmd).Int64("cost", elapsed.Milliseconds()),
 			l.cfg.CallerSkip).Msg(slowMsg)
 	default:
-		addCaller(glog.Ctx(ctx).Info().
+		withCaller(glog.Ctx(ctx).Info().
 			Str("cmd", cmd).Int64("cost", elapsed.Milliseconds()),
 			l.cfg.CallerSkip).Msg(okMsg)
 	}

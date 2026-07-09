@@ -9,7 +9,7 @@ func truncate(s string, maxLen int) string {
 	return s
 }
 
-func addCaller(ev *zerolog.Event, skip int) *zerolog.Event {
+func withCaller(ev *zerolog.Event, skip int) *zerolog.Event {
 	if skip > 0 {
 		return ev.Caller(skip)
 	}
