@@ -15,12 +15,12 @@ Go 微服务工具包。
 | `jwt` | JWT 鉴权（HS256，access/refresh 双令牌） |
 | `dbx` | 数据库工具（泛型仓库、基于 context 的事务管理） |
 
-### 适配器
+### 框架集成
 
 | 模块 | 说明 |
 |------|------|
-| `adapter/log` | 日志适配器（Gin 中间件、GORM Logger、Redis Hook） |
-| `adapter/otel` | 追踪适配器（Gin 中间件、GORM/Redis 自动埋点） |
+| `contrib/log` | 日志集成（Gin 中间件、GORM Logger、Redis Hook） |
+| `contrib/otel` | 追踪集成（Gin 中间件、GORM/Redis 自动埋点） |
 
 ## 使用
 
@@ -34,8 +34,8 @@ import (
     "github.com/lpphub/gost/dbx"
     "github.com/lpphub/gost/httpx"
 
-    logadapt "github.com/lpphub/gost/adapter/log"
-    oteladapt "github.com/lpphub/gost/adapter/otel"
+    contriblog "github.com/lpphub/gost/contrib/log"
+    contribotel "github.com/lpphub/gost/contrib/otel"
 )
 
 // 1. 加载配置（最前置）
@@ -58,23 +58,23 @@ otel.Init(
 r := gin.Default()
 
 // 5. 追踪中间件（先注入 span，日志才能读到 trace 信息）
-r.Use(oteladapt.GinTelemetry("my-app"))
+r.Use(contribotel.GinTelemetry("my-app"))
 
 // 6. 日志中间件（从 context 读取 trace，记录完整请求）
-r.Use(logadapt.GinRequestLog(
-    logadapt.WithSkipPaths("/health", "/metrics"),
+r.Use(contriblog.GinRequestLog(
+    contriblog.WithSkipPaths("/health", "/metrics"),
 ))
 
 // 7. Prometheus metrics 端点
-oteladapt.RegisterMetricsEndpoint(r, "/metrics")
+contribotel.RegisterMetricsEndpoint(r, "/metrics")
 
 // 8. GORM：先装日志，再装追踪
-db.Logger = logadapt.NewGormLogger()
-db = oteladapt.DBTelemetry(db)
+db.Logger = contriblog.NewGormLogger()
+db = contribotel.DBTelemetry(db)
 
 // 9. Redis：先装日志 hook，再装追踪 hook
-rdb.AddHook(logadapt.NewRedisLogger())
-rdb = oteladapt.RedisTelemetry(rdb)
+rdb.AddHook(contriblog.NewRedisLogger())
+rdb = contribotel.RedisTelemetry(rdb)
 
 // 10. 启动
 httpx.StartPprof(httpx.WithPprofPort(6060))
