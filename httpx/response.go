@@ -38,7 +38,7 @@ func Fail(ctx *gin.Context, err error) {
 		return
 	}
 
-	fail(ctx, http.StatusInternalServerError, -1, err.Error())
+	fail(ctx, http.StatusOK, -1, err.Error())
 }
 
 func failWithBizErr(ctx *gin.Context, err *Error) {
@@ -63,7 +63,7 @@ func FailWithData(ctx *gin.Context, err error, data any) {
 		return
 	}
 
-	ctx.AbortWithStatusJSON(http.StatusInternalServerError, Result{
+	ctx.AbortWithStatusJSON(http.StatusOK, Result{
 		Code:    -1,
 		Message: err.Error(),
 		Data:    data,
