@@ -11,12 +11,14 @@ import (
 
 	glog "github.com/lpphub/gost/log"
 	"github.com/redis/go-redis/v9"
+	"github.com/rs/zerolog"
 )
 
 type RedisLogCfg struct {
 	SlowThreshold time.Duration
 	CmdMaxLen     int
 	CallerSkip    int
+	Level         zerolog.Level // 0 = inherit global level; non-zero = override
 }
 
 type RedisLogger struct {
@@ -40,13 +42,13 @@ func (l *RedisLogger) DialHook(next redis.DialHook) redis.DialHook {
 		cost := time.Since(start).Milliseconds()
 
 		if err != nil {
-			withCaller(glog.Ctx(ctx).Error().Err(err).
-				Str("addr", addr).Int64("cost", cost),
-				l.cfg.CallerSkip).Msg("redis connected failed")
+			if ev := l.event(ctx, zerolog.ErrorLevel); ev != nil {
+				ev.Err(err).Str("addr", addr).Int64("cost", cost).Msg("redis connected failed")
+			}
 		} else {
-			withCaller(glog.Ctx(ctx).Info().
-				Str("addr", addr).Int64("cost", cost),
-				l.cfg.CallerSkip).Msg("redis connected")
+			if ev := l.event(ctx, zerolog.InfoLevel); ev != nil {
+				ev.Str("addr", addr).Int64("cost", cost).Msg("redis connected")
+			}
 		}
 		return conn, err
 	}
@@ -77,18 +79,38 @@ func (l *RedisLogger) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.
 func (l *RedisLogger) logResult(ctx context.Context, err error, elapsed time.Duration, cmd, okMsg, slowMsg, errMsg string) {
 	switch {
 	case err != nil && !errors.Is(err, redis.Nil):
-		withCaller(glog.Ctx(ctx).Error().Err(err).
-			Str("cmd", cmd).Int64("cost", elapsed.Milliseconds()),
-			l.cfg.CallerSkip).Msg(errMsg)
+		if ev := l.event(ctx, zerolog.ErrorLevel); ev != nil {
+			ev.Err(err).Str("cmd", cmd).Int64("cost", elapsed.Milliseconds()).Msg(errMsg)
+		}
 	case l.cfg.SlowThreshold > 0 && elapsed > l.cfg.SlowThreshold:
-		withCaller(glog.Ctx(ctx).Warn().
-			Str("cmd", cmd).Int64("cost", elapsed.Milliseconds()),
-			l.cfg.CallerSkip).Msg(slowMsg)
+		if ev := l.event(ctx, zerolog.WarnLevel); ev != nil {
+			ev.Str("cmd", cmd).Int64("cost", elapsed.Milliseconds()).Msg(slowMsg)
+		}
 	default:
-		withCaller(glog.Ctx(ctx).Info().
-			Str("cmd", cmd).Int64("cost", elapsed.Milliseconds()),
-			l.cfg.CallerSkip).Msg(okMsg)
+		if ev := l.event(ctx, zerolog.InfoLevel); ev != nil {
+			ev.Str("cmd", cmd).Int64("cost", elapsed.Milliseconds()).Msg(okMsg)
+		}
 	}
+}
+
+// event returns a *zerolog.Event at the given level with caller attached,
+// or nil when the level is below the configured threshold.
+func (l *RedisLogger) event(ctx context.Context, level zerolog.Level) *zerolog.Event {
+	if l.cfg.Level != 0 && level < l.cfg.Level {
+		return nil
+	}
+	var ev *zerolog.Event
+	switch level {
+	case zerolog.InfoLevel:
+		ev = glog.Ctx(ctx).Info()
+	case zerolog.WarnLevel:
+		ev = glog.Ctx(ctx).Warn()
+	case zerolog.ErrorLevel:
+		ev = glog.Ctx(ctx).Error()
+	default:
+		return nil
+	}
+	return withCaller(ev, l.cfg.CallerSkip)
 }
 
 func (l *RedisLogger) buildCmd(cmd redis.Cmder) string {

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	glog "github.com/lpphub/gost/log"
+	"github.com/rs/zerolog"
 	"gorm.io/gorm"
 	gmlog "gorm.io/gorm/logger"
 )
@@ -15,6 +16,7 @@ type GormLogCfg struct {
 	SlowThreshold time.Duration
 	SQLMaxLen     int
 	CallerSkip    int
+	Level         zerolog.Level // 0 = inherit global level; non-zero = override
 }
 
 type GormLogger struct {
@@ -36,24 +38,27 @@ func (l *GormLogger) LogMode(level gmlog.LogLevel) gmlog.Interface {
 }
 
 func (l *GormLogger) Info(ctx context.Context, msg string, data ...interface{}) {
-	if len(data) > 0 {
-		msg = fmt.Sprintf(msg, data...)
+	ev := l.event(ctx, zerolog.InfoLevel)
+	if ev == nil {
+		return
 	}
-	withCaller(glog.Ctx(ctx).Info(), l.cfg.CallerSkip).Msg(msg)
+	ev.Msg(fmt.Sprintf(msg, data...))
 }
 
 func (l *GormLogger) Warn(ctx context.Context, msg string, data ...interface{}) {
-	if len(data) > 0 {
-		msg = fmt.Sprintf(msg, data...)
+	ev := l.event(ctx, zerolog.WarnLevel)
+	if ev == nil {
+		return
 	}
-	withCaller(glog.Ctx(ctx).Warn(), l.cfg.CallerSkip).Msg(msg)
+	ev.Msg(fmt.Sprintf(msg, data...))
 }
 
 func (l *GormLogger) Error(ctx context.Context, msg string, data ...interface{}) {
-	if len(data) > 0 {
-		msg = fmt.Sprintf(msg, data...)
+	ev := l.event(ctx, zerolog.ErrorLevel)
+	if ev == nil {
+		return
 	}
-	withCaller(glog.Ctx(ctx).Error(), l.cfg.CallerSkip).Msg(msg)
+	ev.Msg(fmt.Sprintf(msg, data...))
 }
 
 func (l *GormLogger) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {
@@ -63,16 +68,37 @@ func (l *GormLogger) Trace(ctx context.Context, begin time.Time, fc func() (stri
 
 	switch {
 	case err != nil && !errors.Is(err, gorm.ErrRecordNotFound):
-		withCaller(glog.Ctx(ctx).Error().Err(fmt.Errorf("query error: %w", err)).
-			Str("sql", sql).Int64("rows", rows).Int64("cost", elapsed.Milliseconds()),
-			l.cfg.CallerSkip).Msg("error")
+		if ev := l.event(ctx, zerolog.ErrorLevel); ev != nil {
+			ev.Err(fmt.Errorf("query error: %w", err)).
+				Str("sql", sql).Int64("rows", rows).Int64("cost", elapsed.Milliseconds()).Msg("error")
+		}
 	case l.cfg.SlowThreshold > 0 && elapsed > l.cfg.SlowThreshold:
-		withCaller(glog.Ctx(ctx).Warn().
-			Str("sql", sql).Int64("rows", rows).Int64("cost", elapsed.Milliseconds()),
-			l.cfg.CallerSkip).Msg("slow query")
+		if ev := l.event(ctx, zerolog.WarnLevel); ev != nil {
+			ev.Str("sql", sql).Int64("rows", rows).Int64("cost", elapsed.Milliseconds()).Msg("slow query")
+		}
 	default:
-		withCaller(glog.Ctx(ctx).Info().
-			Str("sql", sql).Int64("rows", rows).Int64("cost", elapsed.Milliseconds()),
-			l.cfg.CallerSkip).Msg("sql done")
+		if ev := l.event(ctx, zerolog.InfoLevel); ev != nil {
+			ev.Str("sql", sql).Int64("rows", rows).Int64("cost", elapsed.Milliseconds()).Msg("sql done")
+		}
 	}
+}
+
+// event returns a *zerolog.Event at the given level with caller attached,
+// or nil when the level is below the configured threshold.
+func (l *GormLogger) event(ctx context.Context, level zerolog.Level) *zerolog.Event {
+	if l.cfg.Level != 0 && level < l.cfg.Level {
+		return nil
+	}
+	var ev *zerolog.Event
+	switch level {
+	case zerolog.InfoLevel:
+		ev = glog.Ctx(ctx).Info()
+	case zerolog.WarnLevel:
+		ev = glog.Ctx(ctx).Warn()
+	case zerolog.ErrorLevel:
+		ev = glog.Ctx(ctx).Error()
+	default:
+		return nil
+	}
+	return withCaller(ev, l.cfg.CallerSkip)
 }
