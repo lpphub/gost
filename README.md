@@ -46,12 +46,10 @@ import (
 cfg, _ := config.LoadFile[AppConfig]("./config.yml")
 
 // 2. 初始化日志（紧随配置，确保后续组件日志可输出）
-if err := log.Init(
+log.Init(
     log.WithLevel(log.DebugLevel),
     log.WithFileWriter("logs/app.log"),
-); err != nil {
-    panic(err)
-}
+)
 
 // 3. 初始化 OpenTelemetry
 promReader, err := promexp.NewReader()

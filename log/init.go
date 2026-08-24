@@ -6,26 +6,20 @@ import (
 
 var std *zerolog.Logger
 
-var nopLogger = zerolog.Nop()
-
-func Init(opts ...Option) error {
+func Init(opts ...Option) {
 	cfg := defaultConfig()
 	for _, o := range opts {
 		o(cfg)
 	}
-	if cfg.err != nil {
-		return cfg.err
-	}
-
 	l := newZerolog(cfg)
 	std = &l
 	zerolog.DefaultContextLogger = std
-	return nil
 }
 
 func L() *zerolog.Logger {
 	if std == nil {
-		return &nopLogger
+		l := zerolog.Nop()
+		return &l
 	}
 	return std
 }
