@@ -16,7 +16,7 @@ type GormLogCfg struct {
 	SlowThreshold time.Duration
 	SQLMaxLen     int
 	CallerSkip    int
-	Level         zerolog.Level // 0 = inherit global level; non-zero = override
+	Level         zerolog.Level
 }
 
 type GormLogger struct {
@@ -34,7 +34,18 @@ func NewGormLogger(cfg GormLogCfg) gmlog.Interface {
 }
 
 func (l *GormLogger) LogMode(level gmlog.LogLevel) gmlog.Interface {
-	return l
+	cfg := l.cfg
+	switch level {
+	case gmlog.Silent:
+		cfg.Level = zerolog.Disabled
+	case gmlog.Error:
+		cfg.Level = zerolog.ErrorLevel
+	case gmlog.Warn:
+		cfg.Level = zerolog.WarnLevel
+	case gmlog.Info:
+		cfg.Level = zerolog.InfoLevel
+	}
+	return &GormLogger{cfg: cfg}
 }
 
 func (l *GormLogger) Info(ctx context.Context, msg string, data ...interface{}) {
@@ -83,8 +94,6 @@ func (l *GormLogger) Trace(ctx context.Context, begin time.Time, fc func() (stri
 	}
 }
 
-// event returns a *zerolog.Event at the given level with caller attached,
-// or nil when the level is below the configured threshold.
 func (l *GormLogger) event(ctx context.Context, level zerolog.Level) *zerolog.Event {
 	if l.cfg.Level != 0 && level < l.cfg.Level {
 		return nil

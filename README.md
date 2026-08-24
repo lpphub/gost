@@ -7,10 +7,11 @@ Go 微服务工具包。
 ### 核心
 
 | 模块 | 说明 |
-|------|------|
+| ------ | ------ |
 | `config` | 配置管理（基于 viper，支持环境变量覆盖） |
 | `log` | 结构化日志（基于 zerolog + lumberjack，支持 trace 注入） |
 | `otel` | OpenTelemetry 初始化（OTLP gRPC 导出，支持 Prometheus 拉取 metrics） |
+| `otel/promexp` | Prometheus 指标暴露（reader + handler，供 otel.Init 使用） |
 | `httpx` | HTTP 工具（Gin JSON 响应封装、业务错误类型、pprof） |
 | `jwt` | JWT 鉴权（HS256，access/refresh 双令牌） |
 | `dbx` | 数据库工具（泛型仓库、基于 context 的事务管理） |
@@ -28,9 +29,12 @@ Go 微服务工具包。
 
 ```go
 import (
+    "context"
+
     "github.com/lpphub/gost/config"
     "github.com/lpphub/gost/log"
     "github.com/lpphub/gost/otel"
+    "github.com/lpphub/gost/otel/promexp"
     "github.com/lpphub/gost/dbx"
     "github.com/lpphub/gost/httpx"
 
@@ -42,17 +46,26 @@ import (
 cfg, _ := config.LoadFile[AppConfig]("./config.yml")
 
 // 2. 初始化日志（紧随配置，确保后续组件日志可输出）
-log.Init(
+if err := log.Init(
     log.WithLevel(log.DebugLevel),
-    log.WithOutputFile("logs/app.log"),
-)
+    log.WithFileWriter("logs/app.log"),
+); err != nil {
+    panic(err)
+}
 
 // 3. 初始化 OpenTelemetry
-otel.Init(
+promReader, err := promexp.NewReader()
+if err != nil {
+    panic(err)
+}
+if err := otel.Init(
     otel.WithService("my-app"),
     otel.WithOTLPEndpoint("otel-collector:4317"),
-    otel.WithPrometheus(),
-)
+    otel.WithMetricsReader(promReader),
+); err != nil {
+    panic(err)
+}
+defer func() { _ = otel.Shutdown(context.Background()) }()
 
 // 4. 创建 Gin 引擎、注册中间件
 r := gin.Default()
@@ -66,14 +79,14 @@ r.Use(contriblog.GinRequestLog(
 ))
 
 // 7. Prometheus metrics 端点
-contribotel.RegisterMetricsEndpoint(r, "/metrics")
+r.GET("/metrics", gin.WrapH(promexp.Handler()))
 
 // 8. GORM：先装日志，再装追踪
-db.Logger = contriblog.NewGormLogger()
+db.Logger = contriblog.NewGormLogger(contriblog.GormLogCfg{})
 db = contribotel.DBTelemetry(db)
 
 // 9. Redis：先装日志 hook，再装追踪 hook
-rdb.AddHook(contriblog.NewRedisLogger())
+rdb.AddHook(contriblog.NewRedisLogger(contriblog.RedisLogCfg{}))
 rdb = contribotel.RedisTelemetry(rdb)
 
 // 10. 启动

@@ -49,8 +49,8 @@ func WithMetricsReader(reader ...metricsdk.Reader) Option {
 	}
 }
 
-func WithSecure() Option {
-	return func(c *config) { c.insecure = false }
+func WithInsecure(insecure bool) Option {
+	return func(c *config) { c.insecure = insecure }
 }
 
 func defaultConfig() *config {
@@ -82,10 +82,8 @@ func (c *config) applyEnvOverrides() {
 		c.metricsEndpoint = v
 	}
 
-	// Auto-enable when an exporter destination is configured.
 	c.autoEnable()
 
-	// Explicit exporter flags override auto-enable (OTEL_TRACES_EXPORTER=none disables).
 	if v := os.Getenv("OTEL_TRACES_EXPORTER"); v != "" {
 		c.tracesEnabled = v != "none"
 	}

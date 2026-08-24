@@ -2,6 +2,8 @@ package log
 
 import (
 	"bufio"
+	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -35,6 +37,7 @@ func newZerolog(cfg *config) zerolog.Logger {
 type config struct {
 	level   Level
 	outputs []io.Writer
+	err     error
 }
 
 type Option func(*config)
@@ -60,6 +63,10 @@ func WithWriter(w io.Writer) Option {
 
 func WithFileWriter(path string) Option {
 	return func(c *config) {
+		if err := ensureLogFile(path); err != nil {
+			c.err = errors.Join(c.err, err)
+			return
+		}
 		lj := &lumberjack.Logger{
 			Filename:   path,
 			MaxSize:    200,
@@ -69,6 +76,17 @@ func WithFileWriter(path string) Option {
 		}
 		c.outputs = append(c.outputs, bufio.NewWriter(lj))
 	}
+}
+
+func ensureLogFile(path string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("create log dir %s: %w", filepath.Dir(path), err)
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return fmt.Errorf("open log file %s: %w", path, err)
+	}
+	return f.Close()
 }
 
 func (c *config) writer() io.Writer {

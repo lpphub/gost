@@ -3,6 +3,7 @@ package otel
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
@@ -39,13 +40,14 @@ func Init(opts ...Option) error {
 
 	if cfg.tracesEnabled {
 		if err := initTraces(ctx, cfg, res); err != nil {
-			return err
+			return fmt.Errorf("init traces: %w", err)
 		}
 	}
 
 	if cfg.metricsEnabled {
 		if err := initMetrics(ctx, cfg, res); err != nil {
-			return err
+			_ = Shutdown(ctx)
+			return fmt.Errorf("init metrics: %w", err)
 		}
 	}
 

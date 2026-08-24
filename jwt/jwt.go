@@ -2,6 +2,7 @@ package jwt
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -39,6 +40,8 @@ const (
 	RefreshTokenType TokenType = "refresh"
 )
 
+var ErrInvalidTokenType = errors.New("invalid token type")
+
 type Claims struct {
 	UserID uint      `json:"user_id"`
 	Type   TokenType `json:"type"`
@@ -50,20 +53,18 @@ type TokenPair struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
-func (m *Manager) generateToken(userID uint, tokenType TokenType, expireSeconds int64) (string, error) {
+func (m *Manager) generateToken(userID uint, tokenType TokenType, expireSec int64) (string, error) {
 	now := time.Now()
 	claims := Claims{
 		UserID: userID,
 		Type:   tokenType,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(now.Add(time.Duration(expireSeconds) * time.Second)),
+			ExpiresAt: jwt.NewNumericDate(now.Add(time.Second * time.Duration(expireSec))),
 			IssuedAt:  jwt.NewNumericDate(now),
 			NotBefore: jwt.NewNumericDate(now),
 		},
 	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(m.secret)
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(m.secret)
 }
 
 func (m *Manager) GenerateToken(userID uint) (string, error) {
@@ -81,37 +82,33 @@ func (m *Manager) GenerateTokenPair(userID uint) (*TokenPair, error) {
 		return nil, err
 	}
 
-	return &TokenPair{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-	}, nil
+	return &TokenPair{AccessToken: accessToken, RefreshToken: refreshToken}, nil
 }
 
-func (m *Manager) ParseToken(tokenString string) (*Claims, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+func (m *Manager) ParseToken(tokenString string, expected ...TokenType) (*Claims, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(*jwt.Token) (interface{}, error) {
 		return m.secret, nil
-	})
-
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
 	if err != nil {
 		return nil, err
 	}
 
-	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
-		return claims, nil
+	claims, ok := token.Claims.(*Claims)
+	if !ok || !token.Valid {
+		return nil, errors.New("invalid token")
 	}
 
-	return nil, errors.New("invalid token")
+	if len(expected) > 0 && claims.Type != expected[0] {
+		return nil, fmt.Errorf("%w: expected %s token", ErrInvalidTokenType, expected[0])
+	}
+
+	return claims, nil
 }
 
 func (m *Manager) RefreshToken(refreshToken string) (*TokenPair, error) {
-	claims, err := m.ParseToken(refreshToken)
+	claims, err := m.ParseToken(refreshToken, RefreshTokenType)
 	if err != nil {
 		return nil, err
 	}
-
-	if claims.Type != RefreshTokenType {
-		return nil, errors.New("invalid token type: expected refresh token")
-	}
-
 	return m.GenerateTokenPair(claims.UserID)
 }

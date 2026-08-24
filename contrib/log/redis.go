@@ -18,7 +18,7 @@ type RedisLogCfg struct {
 	SlowThreshold time.Duration
 	CmdMaxLen     int
 	CallerSkip    int
-	Level         zerolog.Level // 0 = inherit global level; non-zero = override
+	Level         zerolog.Level
 }
 
 type RedisLogger struct {
@@ -93,8 +93,6 @@ func (l *RedisLogger) logResult(ctx context.Context, err error, elapsed time.Dur
 	}
 }
 
-// event returns a *zerolog.Event at the given level with caller attached,
-// or nil when the level is below the configured threshold.
 func (l *RedisLogger) event(ctx context.Context, level zerolog.Level) *zerolog.Event {
 	if l.cfg.Level != 0 && level < l.cfg.Level {
 		return nil
