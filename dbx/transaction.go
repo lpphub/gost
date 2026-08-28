@@ -12,13 +12,13 @@ func WithTx(ctx context.Context, tx *gorm.DB) context.Context {
 	return context.WithValue(ctx, ctxTxKey{}, tx)
 }
 
-func TxFromContext(ctx context.Context) *gorm.DB {
+func TxFrom(ctx context.Context) *gorm.DB {
 	tx, _ := ctx.Value(ctxTxKey{}).(*gorm.DB)
 	return tx
 }
 
 func TxAwareDB(ctx context.Context, db *gorm.DB) *gorm.DB {
-	if tx := TxFromContext(ctx); tx != nil {
+	if tx := TxFrom(ctx); tx != nil {
 		return tx
 	}
 	return db.WithContext(ctx)
