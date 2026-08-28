@@ -20,9 +20,9 @@ const (
 
 type config struct {
 	serviceName     string
+	endpoint        string
 	tracesEndpoint  string
 	metricsEndpoint string
-	defaultEndpoint string
 	protocol        Protocol
 	sampler         tracesdk.Sampler
 	tracesExporter  string
@@ -38,7 +38,7 @@ func WithService(name string) Option {
 
 // WithEndpoint sets the shared OTLP endpoint for traces and metrics.
 func WithEndpoint(endpoint string) Option {
-	return func(c *config) { c.defaultEndpoint = endpoint }
+	return func(c *config) { c.endpoint = endpoint }
 }
 
 func WithMetricsReader(reader ...metricsdk.Reader) Option {
@@ -67,12 +67,12 @@ func (c *config) endpointFor(specific string) string {
 	if specific != "" {
 		return specific
 	}
-	return c.defaultEndpoint
+	return c.endpoint
 }
 
 func (c *config) applyEnvOverrides() {
 	if v := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"); v != "" {
-		c.defaultEndpoint = v
+		c.endpoint = v
 	}
 	if v := os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"); v != "" {
 		c.tracesEndpoint = v
@@ -106,7 +106,7 @@ func (c *config) metricsEnabled() bool {
 
 func protocolFromEnv(v string) Protocol {
 	switch v {
-	case "http/protobuf", "http/json":
+	case "http/protobuf", "http":
 		return ProtocolHTTP
 	default:
 		return ProtocolGRPC
