@@ -7,214 +7,179 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
 	metricsdk "go.opentelemetry.io/otel/sdk/metric"
-	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
+	"go.opentelemetry.io/otel/sdk/resource"
 )
 
-func TestNewResource(t *testing.T) {
-	res := newResource("test-service")
+func clearOTLPEnv(t *testing.T) {
+	t.Helper()
+	for _, k := range []string{
+		"OTEL_EXPORTER_OTLP_ENDPOINT",
+		"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+		"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
+		"OTEL_EXPORTER_OTLP_PROTOCOL",
+		"OTEL_TRACES_SAMPLER",
+		"OTEL_TRACES_SAMPLER_ARG",
+		"OTEL_TRACES_EXPORTER",
+		"OTEL_METRICS_EXPORTER",
+	} {
+		t.Setenv(k, "")
+	}
+}
 
+func resourceServiceName(t *testing.T, res *resource.Resource) string {
+	t.Helper()
+	for _, kv := range res.Attributes() {
+		if kv.Key == attribute.Key("service.name") {
+			return kv.Value.AsString()
+		}
+	}
+	return ""
+}
+
+func TestNewResource(t *testing.T) {
+	clearOTLPEnv(t)
+	res := newResource("test-service")
 	assert.NotNil(t, res)
-	// The resource should contain the service name attribute.
-	// We can verify by checking the resource's attributes via its schema.
 	assert.NotEmpty(t, res)
+	assert.Equal(t, "test-service", resourceServiceName(t, res))
+}
+
+func TestNewResourceAttributes(t *testing.T) {
+	clearOTLPEnv(t)
+	res := newResource("my-svc")
+	assert.NotNil(t, res)
+	assert.Equal(t, "my-svc", resourceServiceName(t, res))
 }
 
 func TestTracerProvider_NotInitialized(t *testing.T) {
-	// Reset state
 	tracerProvider = nil
-
-	// Should fall back to global provider
 	tp := TracerProvider()
 	assert.NotNil(t, tp)
 	assert.Equal(t, otel.GetTracerProvider(), tp)
 }
 
 func TestMeterProvider_NotInitialized(t *testing.T) {
-	// Reset state
 	meterProvider = nil
-
-	// Should fall back to global provider
 	mp := MeterProvider()
 	assert.NotNil(t, mp)
 	assert.Equal(t, otel.GetMeterProvider(), mp)
 }
 
 func TestShutdown_NilProviders(t *testing.T) {
-	// Reset state
 	tracerProvider = nil
 	meterProvider = nil
-
 	err := Shutdown(context.Background())
 	assert.NoError(t, err)
 }
 
 func TestInit_NoSignalsEnabled(t *testing.T) {
-	// Reset global state
+	clearOTLPEnv(t)
 	tracerProvider = nil
 	meterProvider = nil
 
 	err := Init()
 	assert.NoError(t, err)
 
-	// Even with no signals, the propagator should be set
 	prop := otel.GetTextMapPropagator()
 	assert.NotNil(t, prop)
-	// Should be a composite propagator with TraceContext and Baggage
 	_, ok := prop.(propagation.TextMapPropagator)
 	assert.True(t, ok)
 }
 
+func TestInit_WithService(t *testing.T) {
+	clearOTLPEnv(t)
+	tracerProvider = nil
+	meterProvider = nil
+
+	assert.NoError(t, Init(WithService("my-service")))
+	assert.NotNil(t, otel.GetTextMapPropagator())
+	assert.NoError(t, Shutdown(context.Background()))
+}
+
 func TestInit_WithCustomMetricsReader(t *testing.T) {
-	// Reset global state before test
+	clearOTLPEnv(t)
 	tracerProvider = nil
 	meterProvider = nil
 
 	reader := metricsdk.NewManualReader()
-	err := Init(
-		WithService("test-svc"),
-		WithMetricsReader(reader),
-	)
-
+	err := Init(WithService("test-svc"), WithMetricsReader(reader))
 	assert.NoError(t, err)
 
-	// MeterProvider should be set since we have a reader
 	assert.NotNil(t, meterProvider, "meterProvider should be set after Init with reader")
-	mp := MeterProvider()
-	assert.NotNil(t, mp)
-
+	assert.NotNil(t, MeterProvider())
 	assert.NotNil(t, tracerProvider, "tracerProvider should be a recorder even without an exporter")
-	tp := TracerProvider()
-	assert.NotNil(t, tp)
+	assert.NotNil(t, TracerProvider())
 
-	// Cleanup
 	err = Shutdown(context.Background())
 	assert.NoError(t, err)
 }
 
 func TestShutdown_AfterInitWithMetrics(t *testing.T) {
-	// Reset state
+	clearOTLPEnv(t)
 	tracerProvider = nil
 	meterProvider = nil
 
-	err := Init(
-		WithService("shutdown-test"),
-		WithMetricsReader(metricsdk.NewManualReader()),
-	)
+	err := Init(WithService("shutdown-test"), WithMetricsReader(metricsdk.NewManualReader()))
 	require.NoError(t, err)
-
 	assert.NotNil(t, meterProvider)
 
 	err = Shutdown(context.Background())
-	assert.NoError(t, err)
-
-	// After shutdown, providers should be nil
+	require.NoError(t, err)
 	assert.Nil(t, meterProvider)
 	assert.Nil(t, tracerProvider)
 }
 
-func TestInit_WithService(t *testing.T) {
-	// Reset state
-	tracerProvider = nil
-	meterProvider = nil
-
-	err := Init(WithService("my-service"))
-	assert.NoError(t, err)
-
-	// Propagator should be set
-	assert.NotNil(t, otel.GetTextMapPropagator())
-}
-
 func TestInit_WithTracesAndMetricsEnabled(t *testing.T) {
-	// Reset state
+	clearOTLPEnv(t)
 	tracerProvider = nil
 	meterProvider = nil
 
-	err := Init(WithService("both-test"))
+	err := Init()
 	assert.NoError(t, err)
 	assert.NotNil(t, tracerProvider, "tracerProvider should be a recorder by default")
 	assert.Nil(t, meterProvider, "meterProvider should not be set without a reader/endpoint")
+
+	err = Shutdown(context.Background())
+	assert.NoError(t, err)
 }
 
 func TestInit_PreservesServiceNameInResource(t *testing.T) {
-	// Reset state
-	tracerProvider = nil
-	meterProvider = nil
-
-	err := Init(
-		WithService("resource-test"),
-		WithMetricsReader(metricsdk.NewManualReader()),
-	)
-	require.NoError(t, err)
-
-	// Verify the resource was created with the correct service name
-	// We can't easily inspect the resource internals, but we can verify
-	// the meter provider was created with the resource.
-	mp := meterProvider
-	assert.NotNil(t, mp)
-
-	assert.NoError(t, Shutdown(context.Background()))
+	clearOTLPEnv(t)
+	res := newResource("resource-test")
+	assert.Equal(t, "resource-test", resourceServiceName(t, res))
 }
 
 func TestInit_EnvOverridesAreApplied(t *testing.T) {
-	// This test verifies that Init applies env overrides.
-	// Since we can't easily test the full Init path with real gRPC endpoints,
-	// we verify that Init doesn't panic or error with various env configs.
+	clearOTLPEnv(t)
+	tracerProvider = nil
+	meterProvider = nil
 
-	t.Run("with metrics reader, no endpoints", func(t *testing.T) {
-		tracerProvider = nil
-		meterProvider = nil
-
-		err := Init(WithMetricsReader(metricsdk.NewManualReader()))
-		assert.NoError(t, err)
-
-		assert.NoError(t, Shutdown(context.Background()))
-	})
-}
-
-func TestNewResourceAttributes(t *testing.T) {
-	res := newResource("my-svc")
-
-	assert.NotNil(t, res)
-	// Resource should be created with semconv attributes:
-	// - ServiceName("my-svc")
-	// - TelemetrySDKLanguageGo
-	// - TelemetrySDKName("opentelemetry")
-	// - SchemaURL from semconv
-	_ = semconv.SchemaURL // ensure import is used
+	err := Init(WithMetricsReader(metricsdk.NewManualReader()))
+	assert.NoError(t, err)
+	assert.NoError(t, Shutdown(context.Background()))
 }
 
 func TestShutdown_MultipleCalls(t *testing.T) {
-	// Reset state
+	clearOTLPEnv(t)
 	tracerProvider = nil
 	meterProvider = nil
 
-	err := Init(WithMetricsReader(metricsdk.NewManualReader()))
-	require.NoError(t, err)
-
-	// First shutdown
-	err = Shutdown(context.Background())
-	assert.NoError(t, err)
-
-	// Second shutdown should be safe (providers are nil)
-	err = Shutdown(context.Background())
-	assert.NoError(t, err)
+	require.NoError(t, Init(WithMetricsReader(metricsdk.NewManualReader())))
+	require.NoError(t, Shutdown(context.Background()))
+	require.NoError(t, Shutdown(context.Background()))
 }
 
 func TestShutdown_ContextCancellation(t *testing.T) {
-	// Reset state
+	clearOTLPEnv(t)
 	tracerProvider = nil
 	meterProvider = nil
 
-	err := Init(WithMetricsReader(metricsdk.NewManualReader()))
-	require.NoError(t, err)
+	require.NoError(t, Init(WithMetricsReader(metricsdk.NewManualReader())))
 
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // Cancel immediately
-
-	// Shutdown with cancelled context should not panic
-	err = Shutdown(ctx)
-	// It may return an error from the cancelled context, but should not panic
-	_ = err
+	cancel()
+	_ = Shutdown(ctx)
 }

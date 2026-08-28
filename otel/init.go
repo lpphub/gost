@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -20,18 +21,20 @@ func Init(opts ...Option) error {
 		o(cfg)
 	}
 	cfg.applyEnvOverrides()
+
 	defaultService = cfg.serviceName
+	if defaultService == "" {
+		defaultService = os.Getenv("OTEL_SERVICE_NAME")
+	}
 
 	ctx := context.Background()
 	res := newResource(cfg.serviceName)
 
-	// Traces are always recorded locally so trace_id reaches logs.
 	if err := initTraces(ctx, cfg, res); err != nil {
 		return fmt.Errorf("init traces: %w", err)
 	}
 
-	// Metrics are only built when a reader/endpoint is configured.
-	if cfg.metricsEnabled() {
+	if cfg.enabledMetrics() {
 		if err := initMetrics(ctx, cfg, res); err != nil {
 			_ = Shutdown(ctx)
 			return fmt.Errorf("init metrics: %w", err)

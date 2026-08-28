@@ -26,14 +26,12 @@ func initTraces(ctx context.Context, cfg *config, res *resource.Resource) error 
 		opts = append(opts, tracesdk.WithSampler(cfg.sampler))
 	}
 
-	if cfg.tracesExportEnabled() {
-		if endpoint := cfg.endpointFor(cfg.tracesEndpoint); endpoint != "" {
-			exp, err := newTraceExporter(ctx, cfg, endpoint)
-			if err != nil {
-				return err
-			}
-			opts = append(opts, tracesdk.WithBatcher(exp))
+	if cfg.enabledTracesExport() && cfg.hasTraceEndpoint() {
+		exp, err := newTraceExporter(ctx, cfg)
+		if err != nil {
+			return err
 		}
+		opts = append(opts, tracesdk.WithBatcher(exp))
 	}
 
 	tracerProvider = tracesdk.NewTracerProvider(opts...)
@@ -41,15 +39,11 @@ func initTraces(ctx context.Context, cfg *config, res *resource.Resource) error 
 	return nil
 }
 
-func newTraceExporter(ctx context.Context, cfg *config, endpoint string) (tracesdk.SpanExporter, error) {
+func newTraceExporter(ctx context.Context, cfg *config) (tracesdk.SpanExporter, error) {
 	switch cfg.protocol {
 	case ProtocolHTTP:
-		return otlptracehttp.New(ctx,
-			otlptracehttp.WithEndpoint(endpoint),
-		)
+		return otlptracehttp.New(ctx)
 	default:
-		return otlptracegrpc.New(ctx,
-			otlptracegrpc.WithEndpoint(endpoint),
-		)
+		return otlptracegrpc.New(ctx)
 	}
 }

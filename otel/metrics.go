@@ -27,16 +27,12 @@ func initMetrics(ctx context.Context, cfg *config, res *resource.Resource) error
 		opts = append(opts, metricsdk.WithReader(r))
 	}
 
-	if endpoint := cfg.endpointFor(cfg.metricsEndpoint); endpoint != "" {
-		reader, err := newMetricReader(ctx, cfg, endpoint)
+	if cfg.hasMetricEndpoint() {
+		reader, err := newMetricReader(ctx, cfg)
 		if err != nil {
 			return err
 		}
 		opts = append(opts, metricsdk.WithReader(reader))
-	}
-
-	if len(opts) == 0 {
-		return nil
 	}
 
 	opts = append(opts, metricsdk.WithResource(res))
@@ -45,23 +41,18 @@ func initMetrics(ctx context.Context, cfg *config, res *resource.Resource) error
 	return nil
 }
 
-func newMetricReader(ctx context.Context, cfg *config, endpoint string) (metricsdk.Reader, error) {
+func newMetricReader(ctx context.Context, cfg *config) (metricsdk.Reader, error) {
+	var exp metricsdk.Exporter
+	var err error
+
 	switch cfg.protocol {
 	case ProtocolHTTP:
-		exp, err := otlpmetrichttp.New(ctx,
-			otlpmetrichttp.WithEndpoint(endpoint),
-		)
-		if err != nil {
-			return nil, err
-		}
-		return metricsdk.NewPeriodicReader(exp), nil
+		exp, err = otlpmetrichttp.New(ctx)
 	default:
-		exp, err := otlpmetricgrpc.New(ctx,
-			otlpmetricgrpc.WithEndpoint(endpoint),
-		)
-		if err != nil {
-			return nil, err
-		}
-		return metricsdk.NewPeriodicReader(exp), nil
+		exp, err = otlpmetricgrpc.New(ctx)
 	}
+	if err != nil {
+		return nil, err
+	}
+	return metricsdk.NewPeriodicReader(exp), nil
 }
