@@ -2,18 +2,31 @@ package otel
 
 import (
 	"os"
+	"strconv"
 
 	metricsdk "go.opentelemetry.io/otel/sdk/metric"
+	tracesdk "go.opentelemetry.io/otel/sdk/trace"
+)
+
+// Protocol selects the OTLP transport.
+type Protocol string
+
+const (
+	// ProtocolGRPC is the OTLP/gRPC transport (default).
+	ProtocolGRPC Protocol = "grpc"
+	// ProtocolHTTP is the OTLP/HTTP transport.
+	ProtocolHTTP Protocol = "http/protobuf"
 )
 
 type config struct {
 	serviceName     string
-	tracesEnabled   bool
-	metricsEnabled  bool
 	tracesEndpoint  string
 	metricsEndpoint string
 	defaultEndpoint string
-	insecure        bool
+	protocol        Protocol
+	sampler         tracesdk.Sampler
+	tracesExporter  string
+	metricsExporter string
 	metricsReaders  []metricsdk.Reader
 }
 
@@ -23,24 +36,9 @@ func WithService(name string) Option {
 	return func(c *config) { c.serviceName = name }
 }
 
-func WithOTLPEndpoint(endpoint string) Option {
+// WithEndpoint sets the shared OTLP endpoint for traces and metrics.
+func WithEndpoint(endpoint string) Option {
 	return func(c *config) { c.defaultEndpoint = endpoint }
-}
-
-func WithTracesEndpoint(endpoint string) Option {
-	return func(c *config) { c.tracesEndpoint = endpoint }
-}
-
-func WithMetricsEndpoint(endpoint string) Option {
-	return func(c *config) { c.metricsEndpoint = endpoint }
-}
-
-func WithTracesEnabled(enabled bool) Option {
-	return func(c *config) { c.tracesEnabled = enabled }
-}
-
-func WithMetricsEnabled(enabled bool) Option {
-	return func(c *config) { c.metricsEnabled = enabled }
 }
 
 func WithMetricsReader(reader ...metricsdk.Reader) Option {
@@ -49,15 +47,19 @@ func WithMetricsReader(reader ...metricsdk.Reader) Option {
 	}
 }
 
-func WithInsecure(insecure bool) Option {
-	return func(c *config) { c.insecure = insecure }
+// WithProtocol selects the OTLP transport (gRPC or HTTP).
+func WithProtocol(p Protocol) Option {
+	return func(c *config) { c.protocol = p }
+}
+
+// WithSampler overrides the default AlwaysSample sampler.
+func WithSampler(s tracesdk.Sampler) Option {
+	return func(c *config) { c.sampler = s }
 }
 
 func defaultConfig() *config {
 	return &config{
-		tracesEnabled:  false,
-		metricsEnabled: false,
-		insecure:       true,
+		protocol: ProtocolGRPC,
 	}
 }
 
@@ -69,9 +71,6 @@ func (c *config) endpointFor(specific string) string {
 }
 
 func (c *config) applyEnvOverrides() {
-	if v := os.Getenv("OTEL_SERVICE_NAME"); v != "" {
-		c.serviceName = v
-	}
 	if v := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"); v != "" {
 		c.defaultEndpoint = v
 	}
@@ -81,22 +80,66 @@ func (c *config) applyEnvOverrides() {
 	if v := os.Getenv("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"); v != "" {
 		c.metricsEndpoint = v
 	}
-
-	c.autoEnable()
-
-	if v := os.Getenv("OTEL_TRACES_EXPORTER"); v != "" {
-		c.tracesEnabled = v != "none"
+	if v := os.Getenv("OTEL_EXPORTER_OTLP_PROTOCOL"); v != "" {
+		c.protocol = protocolFromEnv(v)
 	}
-	if v := os.Getenv("OTEL_METRICS_EXPORTER"); v != "" {
-		c.metricsEnabled = v != "none"
+	if v := os.Getenv("OTEL_TRACES_SAMPLER"); v != "" {
+		c.sampler = samplerFromEnv(v, os.Getenv("OTEL_TRACES_SAMPLER_ARG"))
+	}
+
+	c.tracesExporter = os.Getenv("OTEL_TRACES_EXPORTER")
+	c.metricsExporter = os.Getenv("OTEL_METRICS_EXPORTER")
+}
+
+// tracesExportEnabled reports whether spans should be exported.
+func (c *config) tracesExportEnabled() bool {
+	return c.tracesExporter != "none"
+}
+
+// metricsEnabled reports whether a MeterProvider should be built.
+func (c *config) metricsEnabled() bool {
+	if c.metricsExporter == "none" {
+		return false
+	}
+	return c.endpointFor(c.metricsEndpoint) != "" || len(c.metricsReaders) > 0
+}
+
+func protocolFromEnv(v string) Protocol {
+	switch v {
+	case "http/protobuf", "http/json":
+		return ProtocolHTTP
+	default:
+		return ProtocolGRPC
 	}
 }
 
-func (c *config) autoEnable() {
-	if c.endpointFor(c.tracesEndpoint) != "" {
-		c.tracesEnabled = true
+func samplerFromEnv(name, arg string) tracesdk.Sampler {
+	switch name {
+	case "always_off":
+		return tracesdk.NeverSample()
+	case "traceidratio":
+		return tracesdk.TraceIDRatioBased(parseRatio(arg))
+	case "parentbased_always_on":
+		return tracesdk.ParentBased(tracesdk.AlwaysSample())
+	case "parentbased_always_off":
+		return tracesdk.ParentBased(tracesdk.NeverSample())
+	case "parentbased_traceidratio":
+		return tracesdk.ParentBased(tracesdk.TraceIDRatioBased(parseRatio(arg)))
+	default:
+		return tracesdk.AlwaysSample()
 	}
-	if c.endpointFor(c.metricsEndpoint) != "" || len(c.metricsReaders) > 0 {
-		c.metricsEnabled = true
+}
+
+func parseRatio(arg string) float64 {
+	ratio, err := strconv.ParseFloat(arg, 64)
+	if err != nil {
+		return 0
 	}
+	if ratio < 0 {
+		return 0
+	}
+	if ratio > 1 {
+		return 1
+	}
+	return ratio
 }

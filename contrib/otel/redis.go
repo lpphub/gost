@@ -9,6 +9,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/semconv/v1.26.0"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -66,8 +67,8 @@ func (h *otelRedisHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redi
 
 func (h *otelRedisHook) baseAttrs() []attribute.KeyValue {
 	attrs := make([]attribute.KeyValue, 3, 5)
-	attrs[0] = attribute.String("db.system", "redis")
-	attrs[1] = attribute.String("server.address", h.client.Options().Addr)
+	attrs[0] = semconv.DBSystemRedis
+	attrs[1] = semconv.ServerAddressKey.String(h.client.Options().Addr)
 	attrs[2] = attribute.Int("db.redis.database_index", h.client.Options().DB)
 	return attrs
 }

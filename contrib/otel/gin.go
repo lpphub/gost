@@ -6,7 +6,8 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 )
 
-func GinTelemetry(serviceName string, opts ...otelgin.Option) gin.HandlerFunc {
+// GinTraceMiddleware returns a tracing middleware for Gin.
+func GinTraceMiddleware(serviceName string, opts ...otelgin.Option) gin.HandlerFunc {
 	defaults := []otelgin.Option{
 		otelgin.WithTracerProvider(gotel.TracerProvider()),
 		otelgin.WithMeterProvider(gotel.MeterProvider()),

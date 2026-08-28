@@ -10,8 +10,7 @@ Go 微服务工具包。
 | ------ | ------ |
 | `config` | 配置管理（基于 viper，支持环境变量覆盖） |
 | `log` | 结构化日志（基于 zerolog + lumberjack，支持 trace 注入） |
-| `otel` | OpenTelemetry 初始化（OTLP gRPC 导出，支持 Prometheus 拉取 metrics） |
-| `otel/promexp` | Prometheus 指标暴露（reader + handler，供 otel.Init 使用） |
+| `otel` | OpenTelemetry 初始化（OTLP gRPC/HTTP 导出，默认本地录制 span 以支持日志 trace_id） |
 | `httpx` | HTTP 工具（Gin JSON 响应封装、业务错误类型、pprof） |
 | `jwt` | JWT 鉴权（HS256，access/refresh 双令牌） |
 | `dbx` | 数据库工具（泛型仓库、基于 context 的事务管理） |
@@ -34,7 +33,6 @@ import (
     "github.com/lpphub/gost/config"
     "github.com/lpphub/gost/log"
     "github.com/lpphub/gost/otel"
-    "github.com/lpphub/gost/otel/promexp"
     "github.com/lpphub/gost/dbx"
     "github.com/lpphub/gost/httpx"
 
@@ -52,14 +50,12 @@ log.Init(
 )
 
 // 3. 初始化 OpenTelemetry
-promReader, err := promexp.NewReader()
-if err != nil {
-    panic(err)
-}
+//   - traces 默认开启本地录制（供 trace_id 注入日志）；只有配置了 endpoint 才导出。
+//   - metrics 仅在配置了 reader 或 metrics endpoint 时才构建。
+//   - 禁用导出可用 OTEL_TRACES_EXPORTER=none / OTEL_METRICS_EXPORTER=none。
 if err := otel.Init(
     otel.WithService("my-app"),
-    otel.WithOTLPEndpoint("otel-collector:4317"),
-    otel.WithMetricsReader(promReader),
+    otel.WithEndpoint("otel-collector:4317"),
 ); err != nil {
     panic(err)
 }
@@ -69,25 +65,22 @@ defer func() { _ = otel.Shutdown(context.Background()) }()
 r := gin.Default()
 
 // 5. 追踪中间件（先注入 span，日志才能读到 trace 信息）
-r.Use(contribotel.GinTelemetry("my-app"))
+r.Use(contribotel.GinTraceMiddleware("my-app"))
 
 // 6. 日志中间件（从 context 读取 trace，记录完整请求）
 r.Use(contriblog.GinRequestLog(
     contriblog.WithSkipPaths("/health", "/metrics"),
 ))
 
-// 7. Prometheus metrics 端点
-r.GET("/metrics", gin.WrapH(promexp.Handler()))
-
-// 8. GORM：先装日志，再装追踪
+// 7. GORM：先装日志，再装追踪
 db.Logger = contriblog.NewGormLogger(contriblog.GormLogCfg{})
 db = contribotel.DBTelemetry(db)
 
-// 9. Redis：先装日志 hook，再装追踪 hook
+// 8. Redis：先装日志 hook，再装追踪 hook
 rdb.AddHook(contriblog.NewRedisLogger(contriblog.RedisLogCfg{}))
 rdb = contribotel.RedisTelemetry(rdb)
 
-// 10. 启动
+// 9. 启动
 httpx.StartPprof(httpx.WithPprofPort(6060))
 r.Run(":8080")
 ```

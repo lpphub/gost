@@ -10,8 +10,6 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	metricsdk "go.opentelemetry.io/otel/sdk/metric"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 func TestNewResource(t *testing.T) {
@@ -21,38 +19,6 @@ func TestNewResource(t *testing.T) {
 	// The resource should contain the service name attribute.
 	// We can verify by checking the resource's attributes via its schema.
 	assert.NotEmpty(t, res)
-}
-
-func TestDialOpts_Insecure(t *testing.T) {
-	cfg := defaultConfig()
-	cfg.insecure = true
-
-	opts := dialOpts(cfg)
-	require.Len(t, opts, 1)
-
-	// Verify the option contains insecure credentials by checking
-	// it's of the expected type via grpc.WithTransportCredentials
-	assert.NotNil(t, opts[0])
-}
-
-func TestDialOpts_Secure(t *testing.T) {
-	cfg := defaultConfig()
-	cfg.insecure = false
-
-	opts := dialOpts(cfg)
-	assert.Nil(t, opts)
-}
-
-func TestDialOpts_ReturnsPrecomputedSlice(t *testing.T) {
-	// Verify insecureDialOpts is the same precomputed slice
-	cfg := defaultConfig()
-	cfg.insecure = true
-
-	opts := dialOpts(cfg)
-	assert.Len(t, opts, 1)
-
-	// Precomputed slice should match
-	assert.Len(t, insecureDialOpts, 1)
 }
 
 func TestTracerProvider_NotInitialized(t *testing.T) {
@@ -118,8 +84,7 @@ func TestInit_WithCustomMetricsReader(t *testing.T) {
 	mp := MeterProvider()
 	assert.NotNil(t, mp)
 
-	// TracerProvider should NOT be set (no traces enabled)
-	assert.Nil(t, tracerProvider, "tracerProvider should not be set when traces not enabled")
+	assert.NotNil(t, tracerProvider, "tracerProvider should be a recorder even without an exporter")
 	tp := TracerProvider()
 	assert.NotNil(t, tp)
 
@@ -166,33 +131,10 @@ func TestInit_WithTracesAndMetricsEnabled(t *testing.T) {
 	tracerProvider = nil
 	meterProvider = nil
 
-	// Enable both signals but without endpoints — should not error
-	err := Init(
-		WithService("both-test"),
-		WithTracesEnabled(true),
-		WithMetricsEnabled(true),
-	)
+	err := Init(WithService("both-test"))
 	assert.NoError(t, err)
-}
-
-func TestDialOpts_Integration(t *testing.T) {
-	t.Run("matches grpc expected option type", func(t *testing.T) {
-		cfg := defaultConfig()
-		cfg.insecure = true
-
-		opts := dialOpts(cfg)
-		require.Len(t, opts, 1)
-
-		// Apply the dial option to a grpc dial config to ensure compatibility
-		var dialOpts []grpc.DialOption
-		dialOpts = append(dialOpts, opts...)
-		assert.Len(t, dialOpts, 1)
-	})
-
-	t.Run("insecure credential is correct type", func(t *testing.T) {
-		credOpt := grpc.WithTransportCredentials(insecure.NewCredentials())
-		assert.NotNil(t, credOpt)
-	})
+	assert.NotNil(t, tracerProvider, "tracerProvider should be a recorder by default")
+	assert.Nil(t, meterProvider, "meterProvider should not be set without a reader/endpoint")
 }
 
 func TestInit_PreservesServiceNameInResource(t *testing.T) {
