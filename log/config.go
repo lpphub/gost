@@ -1,15 +1,13 @@
 package log
 
 import (
-	"bufio"
 	"io"
 	"os"
 	"path/filepath"
 	"strconv"
-	"sync"
+	"strings"
 
 	"github.com/rs/zerolog"
-	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 type (
@@ -17,16 +15,9 @@ type (
 	Level = zerolog.Level
 )
 
-var (
-	timeFormat = "2006-01-02 15:04:05.000Z07:00"
-	zlogOnce   sync.Once
-)
-
 func newZerolog(cfg *config) zerolog.Logger {
-	zlogOnce.Do(func() {
-		zerolog.TimeFieldFormat = timeFormat
-		zerolog.CallerMarshalFunc = callerShortFunc
-	})
+	zerolog.TimeFieldFormat = "2006-01-02 15:04:05.000Z07:00"
+	zerolog.CallerMarshalFunc = callerShortFunc
 
 	return zerolog.New(cfg.writer()).
 		Level(cfg.level).With().Timestamp().Logger()
@@ -52,29 +43,15 @@ func WithLevel(level Level) Option {
 	}
 }
 
+// WithWriter adds a log output sink. Pass it multiple times to write to
+// several sinks at once (they are combined with io.MultiWriter).
 func WithWriter(w io.Writer) Option {
 	return func(c *config) {
 		c.outputs = append(c.outputs, w)
 	}
 }
 
-func WithFileWriter(path string) Option {
-	return func(c *config) {
-		lj := &lumberjack.Logger{
-			Filename:   path,
-			MaxSize:    200,
-			MaxBackups: 5,
-			MaxAge:     14,
-			Compress:   true,
-		}
-		c.outputs = append(c.outputs, bufio.NewWriter(lj))
-	}
-}
-
 func (c *config) writer() io.Writer {
-	if len(c.outputs) == 0 {
-		return os.Stdout
-	}
 	if len(c.outputs) == 1 {
 		return c.outputs[0]
 	}
@@ -82,16 +59,9 @@ func (c *config) writer() io.Writer {
 }
 
 func callerShortFunc(_ uintptr, file string, line int) string {
-	file = filepath.ToSlash(file)
-	n := 2
-	for i := len(file) - 1; i >= 0; i-- {
-		if file[i] == '/' {
-			n--
-			if n == 0 {
-				file = file[i+1:]
-				break
-			}
-		}
+	parts := strings.Split(filepath.ToSlash(file), "/")
+	if len(parts) > 2 {
+		parts = parts[len(parts)-2:]
 	}
-	return file + ":" + strconv.Itoa(line)
+	return strings.Join(parts, "/") + ":" + strconv.Itoa(line)
 }

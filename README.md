@@ -9,7 +9,7 @@ Go 微服务工具包。
 | 模块 | 说明 |
 | ------ | ------ |
 | `config` | 配置管理（基于 viper，支持环境变量覆盖） |
-| `log` | 结构化日志（基于 zerolog + lumberjack，支持 trace 注入） |
+| `log` | 结构化日志（基于 zerolog，日志 sink 通过 WithWriter 可插拔，支持 trace 注入） |
 | `otel` | OpenTelemetry 初始化（OTLP gRPC/HTTP 导出，默认本地录制 span 以支持日志 trace_id） |
 | `httpx` | HTTP 工具（Gin JSON 响应封装、业务错误类型、pprof） |
 | `jwt` | JWT 鉴权（HS256，access/refresh 双令牌） |
@@ -29,6 +29,7 @@ Go 微服务工具包。
 ```go
 import (
     "context"
+    "os"
 
     "github.com/lpphub/gost/config"
     "github.com/lpphub/gost/log"
@@ -46,7 +47,7 @@ cfg, _ := config.LoadFile[AppConfig]("./config.yml")
 // 2. 初始化日志（紧随配置，确保后续组件日志可输出）
 log.Init(
     log.WithLevel(log.DebugLevel),
-    log.WithFileWriter("logs/app.log"),
+    log.WithWriter(os.Stdout), // 扩展点：任意 io.Writer——控制台/文件/VictoriaLogs/FluentBit
 )
 
 // 3. 初始化 OpenTelemetry
