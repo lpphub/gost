@@ -21,6 +21,10 @@ func MeterProvider() otelmetric.MeterProvider {
 }
 
 func initMetrics(ctx context.Context, cfg *config, res *resource.Resource) error {
+	if !cfg.enabledMetrics() {
+		return nil
+	}
+
 	var opts []metricsdk.Option
 
 	for _, r := range cfg.metricsReaders {

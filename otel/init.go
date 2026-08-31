@@ -4,13 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
-	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
 
 var defaultService string
@@ -22,23 +20,17 @@ func Init(opts ...Option) error {
 	}
 	cfg.applyEnvOverrides()
 
-	defaultService = cfg.serviceName
-	if defaultService == "" {
-		defaultService = os.Getenv("OTEL_SERVICE_NAME")
-	}
-
 	ctx := context.Background()
 	res := newResource(cfg.serviceName)
+	defaultService = serviceNameOf(res)
 
 	if err := initTraces(ctx, cfg, res); err != nil {
 		return fmt.Errorf("init traces: %w", err)
 	}
 
-	if cfg.enabledMetrics() {
-		if err := initMetrics(ctx, cfg, res); err != nil {
-			_ = Shutdown(ctx)
-			return fmt.Errorf("init metrics: %w", err)
-		}
+	if err := initMetrics(ctx, cfg, res); err != nil {
+		_ = Shutdown(ctx)
+		return fmt.Errorf("init metrics: %w", err)
 	}
 
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
@@ -70,20 +62,35 @@ func Shutdown(ctx context.Context) error {
 }
 
 func newResource(serviceName string) *resource.Resource {
-	attrs := []attribute.KeyValue{
-		semconv.TelemetrySDKLanguageGo,
-		semconv.TelemetrySDKName("opentelemetry"),
+	opts := []resource.Option{
+		resource.WithFromEnv(),
+		resource.WithTelemetrySDK(),
 	}
 	if serviceName != "" {
-		attrs = append(attrs, semconv.ServiceName(serviceName))
+		opts = append(opts, resource.WithAttributes(attribute.String("service.name", serviceName)))
 	}
 
-	res, err := resource.Merge(
-		resource.Default(),
-		resource.NewWithAttributes(semconv.SchemaURL, attrs...),
-	)
+	res, err := resource.New(context.Background(), opts...)
 	if err != nil {
-		return resource.NewWithAttributes(semconv.SchemaURL, attrs...)
+		otel.Handle(err)
+	}
+
+	if serviceNameOf(res) == "" {
+		if merged, mErr := resource.Merge(res, resource.NewSchemaless(attribute.String("service.name", "unknown_service"))); mErr == nil {
+			res = merged
+		}
 	}
 	return res
+}
+
+func serviceNameOf(res *resource.Resource) string {
+	if res == nil {
+		return ""
+	}
+	for _, kv := range res.Attributes() {
+		if kv.Key == "service.name" {
+			return kv.Value.AsString()
+		}
+	}
+	return ""
 }

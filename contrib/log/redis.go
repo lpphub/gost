@@ -3,13 +3,13 @@ package log
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net"
 	"strconv"
 	"strings"
 	"time"
 
 	glog "github.com/lpphub/gost/log"
+	"github.com/redis/go-redis/extra/rediscmd/v9"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
 )
@@ -112,18 +112,7 @@ func (l *RedisLogger) event(ctx context.Context, level zerolog.Level) *zerolog.E
 }
 
 func (l *RedisLogger) buildCmd(cmd redis.Cmder) string {
-	args := cmd.Args()
-	if len(args) == 0 {
-		return cmd.Name()
-	}
-	var sb strings.Builder
-	for i, arg := range args {
-		if i > 0 {
-			sb.WriteByte(' ')
-		}
-		fmt.Fprint(&sb, arg)
-	}
-	return truncate(sb.String(), l.cfg.CmdMaxLen)
+	return truncate(rediscmd.CmdString(cmd), l.cfg.CmdMaxLen)
 }
 
 func (l *RedisLogger) buildPipelineCmd(cmds []redis.Cmder) string {
@@ -141,7 +130,7 @@ func (l *RedisLogger) buildPipelineCmd(cmds []redis.Cmder) string {
 			sb.WriteString(" more)")
 			break
 		}
-		sb.WriteString(l.buildCmd(cmd))
+		sb.WriteString(rediscmd.CmdString(cmd))
 	}
 	return truncate(sb.String(), l.cfg.CmdMaxLen)
 }
