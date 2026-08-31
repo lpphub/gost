@@ -66,7 +66,7 @@ defer func() { _ = otel.Shutdown(context.Background()) }()
 r := gin.Default()
 
 // 5. 追踪中间件（先注入 span，日志才能读到 trace 信息）
-r.Use(contribotel.GinTraceMiddleware("my-app"))
+r.Use(contribotel.GinTelemetry("my-app"))
 
 // 6. 日志中间件（从 context 读取 trace，记录完整请求）
 r.Use(contriblog.GinRequestLog(
@@ -74,7 +74,7 @@ r.Use(contriblog.GinRequestLog(
 ))
 
 // 7. GORM：先装日志，再装追踪
-db.Logger = contriblog.NewGormLogger(contriblog.GormLogCfg{})
+db.Logger = contriblog.NewGORMLogger(contriblog.GORMLogCfg{})
 db = contribotel.DBTelemetry(db)
 
 // 8. Redis：先装日志 hook，再装追踪 hook

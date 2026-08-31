@@ -6,7 +6,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func DBTracing(db *gorm.DB) *gorm.DB {
+func DBTelemetry(db *gorm.DB) *gorm.DB {
 	if err := db.Use(otelgorm.NewPlugin()); err != nil {
 		otel.Handle(err)
 	}

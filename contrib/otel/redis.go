@@ -6,7 +6,7 @@ import (
 	"go.opentelemetry.io/otel"
 )
 
-func RedisTracing(client *redis.Client) *redis.Client {
+func RedisTelemetry(client *redis.Client) *redis.Client {
 	if err := redisotel.InstrumentTracing(client); err != nil {
 		otel.Handle(err)
 	}

@@ -12,28 +12,28 @@ import (
 	gmlog "gorm.io/gorm/logger"
 )
 
-type GormLogCfg struct {
+type GORMLogCfg struct {
 	SlowThreshold time.Duration
 	SQLMaxLen     int
 	CallerSkip    int
 	Level         zerolog.Level
 }
 
-type GormLogger struct {
-	cfg GormLogCfg
+type GORMLogger struct {
+	cfg GORMLogCfg
 }
 
-func NewGormLogger(cfg GormLogCfg) gmlog.Interface {
+func NewGORMLogger(cfg GORMLogCfg) gmlog.Interface {
 	if cfg.SlowThreshold == 0 {
 		cfg.SlowThreshold = 2000 * time.Millisecond
 	}
 	if cfg.SQLMaxLen == 0 {
 		cfg.SQLMaxLen = 1024
 	}
-	return &GormLogger{cfg: cfg}
+	return &GORMLogger{cfg: cfg}
 }
 
-func (l *GormLogger) LogMode(level gmlog.LogLevel) gmlog.Interface {
+func (l *GORMLogger) LogMode(level gmlog.LogLevel) gmlog.Interface {
 	cfg := l.cfg
 	switch level {
 	case gmlog.Silent:
@@ -45,10 +45,10 @@ func (l *GormLogger) LogMode(level gmlog.LogLevel) gmlog.Interface {
 	case gmlog.Info:
 		cfg.Level = zerolog.InfoLevel
 	}
-	return &GormLogger{cfg: cfg}
+	return &GORMLogger{cfg: cfg}
 }
 
-func (l *GormLogger) Info(ctx context.Context, msg string, data ...interface{}) {
+func (l *GORMLogger) Info(ctx context.Context, msg string, data ...interface{}) {
 	ev := l.event(ctx, zerolog.InfoLevel)
 	if ev == nil {
 		return
@@ -56,7 +56,7 @@ func (l *GormLogger) Info(ctx context.Context, msg string, data ...interface{}) 
 	ev.Msg(fmt.Sprintf(msg, data...))
 }
 
-func (l *GormLogger) Warn(ctx context.Context, msg string, data ...interface{}) {
+func (l *GORMLogger) Warn(ctx context.Context, msg string, data ...interface{}) {
 	ev := l.event(ctx, zerolog.WarnLevel)
 	if ev == nil {
 		return
@@ -64,7 +64,7 @@ func (l *GormLogger) Warn(ctx context.Context, msg string, data ...interface{}) 
 	ev.Msg(fmt.Sprintf(msg, data...))
 }
 
-func (l *GormLogger) Error(ctx context.Context, msg string, data ...interface{}) {
+func (l *GORMLogger) Error(ctx context.Context, msg string, data ...interface{}) {
 	ev := l.event(ctx, zerolog.ErrorLevel)
 	if ev == nil {
 		return
@@ -72,7 +72,7 @@ func (l *GormLogger) Error(ctx context.Context, msg string, data ...interface{})
 	ev.Msg(fmt.Sprintf(msg, data...))
 }
 
-func (l *GormLogger) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {
+func (l *GORMLogger) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {
 	elapsed := time.Since(begin)
 	sql, rows := fc()
 	sql = truncate(sql, l.cfg.SQLMaxLen)
@@ -94,7 +94,7 @@ func (l *GormLogger) Trace(ctx context.Context, begin time.Time, fc func() (stri
 	}
 }
 
-func (l *GormLogger) event(ctx context.Context, level zerolog.Level) *zerolog.Event {
+func (l *GORMLogger) event(ctx context.Context, level zerolog.Level) *zerolog.Event {
 	if l.cfg.Level != 0 && level < l.cfg.Level {
 		return nil
 	}
