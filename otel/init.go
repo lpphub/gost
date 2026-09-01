@@ -11,8 +11,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 )
 
-var defaultService string
-
 func Init(opts ...Option) error {
 	cfg := defaultConfig()
 	for _, o := range opts {
@@ -22,7 +20,6 @@ func Init(opts ...Option) error {
 
 	ctx := context.Background()
 	res := newResource(cfg.serviceName)
-	defaultService = serviceNameOf(res)
 
 	if err := initTraces(ctx, cfg, res); err != nil {
 		return fmt.Errorf("init traces: %w", err)
