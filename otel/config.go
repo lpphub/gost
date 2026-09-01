@@ -35,10 +35,6 @@ func WithMetricsReader(reader ...metricsdk.Reader) Option {
 	}
 }
 
-func WithProtocol(p Protocol) Option {
-	return func(c *config) { c.protocol = p }
-}
-
 func WithSampler(s tracesdk.Sampler) Option {
 	return func(c *config) { c.sampler = s }
 }

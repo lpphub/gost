@@ -11,6 +11,8 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 )
 
+// Init sets up the global OpenTelemetry providers; exporter/protocol/sampler
+// config comes from the standard OTel environment variables.
 func Init(opts ...Option) error {
 	cfg := defaultConfig()
 	for _, o := range opts {

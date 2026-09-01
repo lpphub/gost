@@ -50,13 +50,9 @@ log.Init(
     log.WithWriter(os.Stdout), // 扩展点：任意 io.Writer——控制台/文件/VictoriaLogs/FluentBit
 )
 
-// 3. 初始化 OpenTelemetry
-//   - traces 默认开启本地录制（供 trace_id 注入日志）；只有配置了 endpoint 才导出。
-//   - metrics 仅在配置了 reader 或 metrics endpoint 时才构建。
-//   - 禁用导出可用 OTEL_TRACES_EXPORTER=none / OTEL_METRICS_EXPORTER=none。
+// 3. 初始化 OpenTelemetry（导出/采样配置走标准环境变量，见 otel.Init 文档）
 if err := otel.Init(
     otel.WithService("my-app"),
-    otel.WithEndpoint("otel-collector:4317"),
 ); err != nil {
     panic(err)
 }
