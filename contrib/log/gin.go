@@ -97,7 +97,7 @@ func GinRequestLog(opts ...RequestLogOption) gin.HandlerFunc {
 		ev := glog.Ctx(ctx).
 			Info().
 			Int("status", c.Writer.Status()).
-			Int64("latency", time.Since(start).Milliseconds()).
+			Int64("elapsed_ms", time.Since(start).Milliseconds()).
 			Str("method", c.Request.Method).
 			Str("path", c.Request.RequestURI)
 
