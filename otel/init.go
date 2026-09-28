@@ -3,93 +3,70 @@ package otel
 import (
 	"context"
 	"errors"
-	"fmt"
+	"sync"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric/noop"
 	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/sdk/resource"
+	metricsdk "go.opentelemetry.io/otel/sdk/metric"
+	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 )
 
-// Init sets up the global OpenTelemetry providers; exporter/protocol/sampler
-// config comes from the standard OTel environment variables.
-func Init(opts ...Option) error {
-	cfg := defaultConfig()
-	for _, o := range opts {
-		o(cfg)
+type providers struct {
+	tracer *tracesdk.TracerProvider
+	meter  *metricsdk.MeterProvider
+	once   sync.Once
+}
+
+func newProviders(ctx context.Context, service string) (*providers, error) {
+	pl, err := resolve(settingsFrom(service), defaultRegistries)
+	if err != nil {
+		return nil, err
 	}
-	cfg.applyEnvOverrides()
+	return pl.build(ctx)
+}
 
-	ctx := context.Background()
-	res := newResource(cfg.serviceName)
+func (p *providers) shutdown(ctx context.Context) error {
+	if p == nil {
+		return nil
+	}
+	var err error
+	p.once.Do(func() {
+		err = errors.Join(err, p.tracer.Shutdown(ctx))
+		if p.meter != nil {
+			err = errors.Join(err, p.meter.Shutdown(ctx))
+		}
+	})
+	return err
+}
 
-	if err := initTraces(ctx, cfg, res); err != nil {
-		return fmt.Errorf("init traces: %w", err)
+var installed *providers
+
+// Init 构建 provider 并安装为 otel 进程级全局（含 W3C tracecontext/baggage 传播器）。
+func Init(service string) error {
+	p, err := newProviders(context.Background(), service)
+	if err != nil {
+		return err
 	}
 
-	if err := initMetrics(ctx, cfg, res); err != nil {
-		_ = Shutdown(ctx)
-		return fmt.Errorf("init metrics: %w", err)
+	otel.SetTracerProvider(p.tracer)
+	if p.meter == nil {
+		otel.SetMeterProvider(noop.NewMeterProvider())
+	} else {
+		otel.SetMeterProvider(p.meter)
 	}
-
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
 		propagation.TraceContext{},
 		propagation.Baggage{},
 	))
 
+	installed = p
 	return nil
 }
 
+// Shutdown 关闭 Init 安装的 provider，幂等，未 Init 时返回 nil。
 func Shutdown(ctx context.Context) error {
-	var errs []error
-
-	if tracerProvider != nil {
-		if err := tracerProvider.Shutdown(ctx); err != nil {
-			errs = append(errs, err)
-		}
-		tracerProvider = nil
-	}
-
-	if meterProvider != nil {
-		if err := meterProvider.Shutdown(ctx); err != nil {
-			errs = append(errs, err)
-		}
-		meterProvider = nil
-	}
-
-	return errors.Join(errs...)
-}
-
-func newResource(serviceName string) *resource.Resource {
-	opts := []resource.Option{
-		resource.WithFromEnv(),
-		resource.WithTelemetrySDK(),
-	}
-	if serviceName != "" {
-		opts = append(opts, resource.WithAttributes(attribute.String("service.name", serviceName)))
-	}
-
-	res, err := resource.New(context.Background(), opts...)
-	if err != nil {
-		otel.Handle(err)
-	}
-
-	if serviceNameOf(res) == "" {
-		if merged, mErr := resource.Merge(res, resource.NewSchemaless(attribute.String("service.name", "unknown_service"))); mErr == nil {
-			res = merged
-		}
-	}
-	return res
-}
-
-func serviceNameOf(res *resource.Resource) string {
-	if res == nil {
-		return ""
-	}
-	for _, kv := range res.Attributes() {
-		if kv.Key == "service.name" {
-			return kv.Value.AsString()
-		}
-	}
-	return ""
+	p := installed
+	installed = nil
+	return p.shutdown(ctx)
 }
