@@ -18,10 +18,9 @@ Go 微服务工具包。
 ### 框架集成
 
 | 模块 | 说明 |
-|------|------|
+| ------ | ------ |
 | `contrib/log` | 日志集成（Gin 中间件、GORM Logger、Redis Hook） |
-| `contrib/otel` | 追踪集成（GORM/Redis 自动埋点） |
-| `contrib/obs` | Gin 可观测性组合（追踪中间件 + 请求日志，顺序已编排） |
+| `contrib/obs` | 可观测性集成（Gin 中间件组合、GORM/Redis 追踪埋点） |
 
 ## 使用
 
@@ -39,7 +38,6 @@ import (
     "github.com/lpphub/gost/httpx"
 
     contriblog "github.com/lpphub/gost/contrib/log"
-    contribotel "github.com/lpphub/gost/contrib/otel"
     "github.com/lpphub/gost/contrib/obs"
 )
 
@@ -66,18 +64,20 @@ r.Use(obs.Gin("my-app",
     contriblog.WithSkipPaths("/health", "/metrics"),
 )...)
 
-// 6. GORM：先装日志，再装追踪
+// 6. GORM：日志 + 追踪
 db.Logger = contriblog.NewGORMLogger(contriblog.GORMLogCfg{})
-db = contribotel.DBTelemetry(db)
+db = obs.DB(db)
 
-// 7. Redis：先装日志 hook，再装追踪 hook
+// 7. Redis：日志 hook + 追踪 hook
 rdb.AddHook(contriblog.NewRedisLogger(contriblog.RedisLogCfg{}))
-rdb = contribotel.RedisTelemetry(rdb)
+rdb = obs.Redis(rdb)
 
 // 8. 启动
 httpx.StartPprof(httpx.WithPprofPort(6060))
 r.Run(":8080")
 ```
+
+`obs.Gin` 的顺序是硬约束：`GinRequestLog` 从请求 ctx 里读 span，所以追踪中间件必须先跑。GORM/Redis 侧的日志与追踪互不依赖，先后随意——它们日志里的 `trace_id` 来自 HTTP 请求 ctx 的透传。
 
 ## 自定义导出器（例如 gRPC）
 
