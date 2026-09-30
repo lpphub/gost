@@ -11,7 +11,8 @@ Go 微服务工具包。
 | `config` | 配置管理（基于 viper，支持环境变量覆盖） |
 | `log` | 结构化日志（基于 zerolog，日志 sink 通过 WithWriter 可插拔，支持 trace 注入） |
 | `otel` | OpenTelemetry 初始化（默认只本地录制 span 以支持日志 trace_id；配了 OTLP 地址才开始导出，导出器/地址/协议/采样全走标准环境变量，gRPC 等导出器用 `RegisterTraceExporter`/`RegisterMetricReader` 注册） |
-| `httpx` | HTTP 工具（Gin JSON 响应封装、业务错误类型、pprof） |
+| `errs` | 业务错误（错误码 + 对外文案 + 状态码 + 只进日志的原因链） |
+| `httpx` | HTTP 工具（Gin JSON 响应封装、pprof） |
 | `jwt` | JWT 鉴权（HS256，access/refresh 双令牌） |
 | `dbx` | 数据库工具（泛型仓库、基于 context 的事务管理） |
 
@@ -36,6 +37,7 @@ import (
     "github.com/lpphub/gost/otel"
     "github.com/lpphub/gost/dbx"
     "github.com/lpphub/gost/httpx"
+    "github.com/lpphub/gost/errs"
 
     contriblog "github.com/lpphub/gost/contrib/log"
     "github.com/lpphub/gost/contrib/obs"
@@ -56,28 +58,71 @@ if err := otel.Init("my-app"); err != nil {
 }
 defer func() { _ = otel.Shutdown(context.Background()) }()
 
-// 4. 创建 Gin 引擎、注册中间件
-r := gin.Default()
+// 4. 创建 Gin 引擎，按「外 → 内」注册中间件
+r := gin.New()
+r.Use(gin.Logger()) // 可选；确认 GinRequestLog 已记错误后可去掉，避免同一条错误打两遍
 
-// 5. 追踪 + 请求日志中间件（obs 负责顺序：先注入 span，日志才能读到 trace）
-r.Use(obs.Gin("my-app",
+// 5. 追踪 + 请求日志（obs 负责顺序：先注入 span，日志才能读到 trace）
+r.Use(obs.GinObs("my-app",
     contriblog.WithSkipPaths("/health", "/metrics"),
 )...)
 
-// 6. GORM：日志 + 追踪
+// 6. Recovery 放最内层：panic 时它写 500 并追加一条 c.Errors，
+//    外层 GinRequestLog 的 c.Next() 才能正常返回并记下这条错误
+r.Use(gin.CustomRecoveryWithWriter(os.Stderr, func(c *gin.Context, rec any) {
+    httpx.Fail(c, errs.ErrUnclassified.Wrapf("panic: %v", rec))
+}))
+
+// 7. GORM：日志 + 追踪
 db.Logger = contriblog.NewGORMLogger(contriblog.GORMLogCfg{})
 db = obs.DB(db)
 
-// 7. Redis：日志 hook + 追踪 hook
+// 8. Redis：日志 hook + 追踪 hook
 rdb.AddHook(contriblog.NewRedisLogger(contriblog.RedisLogCfg{}))
 rdb = obs.Redis(rdb)
 
-// 8. 启动
+// 9. 启动
 httpx.StartPprof(httpx.WithPprofPort(6060))
 r.Run(":8080")
 ```
 
-`obs.Gin` 的顺序是硬约束：`GinRequestLog` 从请求 ctx 里读 span，所以追踪中间件必须先跑。GORM/Redis 侧的日志与追踪互不依赖，先后随意——它们日志里的 `trace_id` 来自 HTTP 请求 ctx 的透传。
+中间件顺序是硬约束，共三条：`GinRequestLog` 从请求 ctx 里读 span，所以 `otelgin` 必须先跑（`obs.GinObs` 已把这两个排好）；`GinRequestLog` 是在 `c.Next()` 之后写日志且没有 `defer`，所以 Recovery 必须在它**内层**，否则被 panic 的请求一条请求日志都不会有。GORM/Redis 侧的日志与追踪互不依赖，先后随意——它们日志里的 `trace_id` 来自 HTTP 请求 ctx 的透传。
+
+## 错误处理
+
+`errs` 只做错误定义，不带注册表、不带内置错误码；业务码、文案、状态码全部由应用侧声明。
+
+```go
+const (
+    CodeUserNotFound = 1001
+    CodeBalanceShort = 1002
+    CodeInternal     = 9000
+)
+
+var (
+    // 业务失败：HTTP 200 + body.code，不记 error 日志、不告警
+    ErrUserNotFound = errs.New(CodeUserNotFound, "用户不存在")
+    ErrBalanceShort = errs.New(CodeBalanceShort, "余额不足")
+    // 内部错误必须显式写状态码，漏写就只会静默返回 200
+    ErrInternal = errs.NewWithStatus(CodeInternal, "internal error", http.StatusInternalServerError)
+)
+```
+
+```go
+return ErrUserNotFound.Wrapf("查询用户 uid=%d 失败: %w", uid, err)   // service 层，不认识 HTTP
+return ErrBalanceShort.With("余额不足，还差 %d 元", diff)
+return ErrInternal.Wrapf("扣款失败 uid=%d order=%s: %w", uid, oid, err)
+
+if errs.IsCode(err, CodeUserNotFound) { /* 兜底建号 */ }
+
+httpx.Respond(ctx, svc.Do(req))   // handler 唯一的错误出口
+```
+
+`New` 默认 200，`NewWithStatus` 显式指定，`With` 覆写文案并保留 code/status（要参数化文案就用它，别在调用点重写 `NewWithStatus`，否则状态码会散落多处）。`< 500` 视为预期内的业务失败，不记 error、不告警。响应体只取 `Message()`，日志记原始 `err`（`httpx.Fail` 把它交给 `ctx.Error`）；内部细节只进 `cause`。中间层只 `Wrap`/`Wrapf`/`With`，不打日志。
+
+### panic 兜底
+
+沿用 gin 自带的 `Recovery`，只换掉它的 handler（见上面第 6 步），不额外写中间件：它本身不崩、请求 dump 里的 `Authorization` 也已脱敏，唯一缺口是 `defaultHandleRecovery` 只写状态码导致空 body。位置必须在 `GinRequestLog` 内层，否则被 panic 的请求在 zerolog 里完全没有记录。
 
 ## 自定义导出器（例如 gRPC）
 

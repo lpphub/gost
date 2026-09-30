@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	glog "github.com/lpphub/gost/log"
+	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -94,12 +95,25 @@ func GinRequestLog(opts ...RequestLogOption) gin.HandlerFunc {
 
 		c.Next()
 
-		ev := glog.Ctx(ctx).
-			Info().
-			Int("status", c.Writer.Status()).
+		status := c.Writer.Status()
+
+		l := glog.Ctx(ctx)
+		var ev *zerolog.Event
+		if status >= 500 {
+			ev = l.Error()
+		} else {
+			ev = l.Info()
+		}
+
+		ev = ev.
+			Int("status", status).
 			Int64("elapsed_ms", time.Since(start).Milliseconds()).
 			Str("method", c.Request.Method).
 			Str("path", c.Request.RequestURI)
+
+		if msgs := c.Errors.Errors(); len(msgs) > 0 {
+			ev = ev.Strs("error", msgs)
+		}
 
 		if ww != nil {
 			body := ww.body.String()
@@ -115,6 +129,6 @@ func GinRequestLog(opts ...RequestLogOption) gin.HandlerFunc {
 			}
 		}
 
-		ev.Msg("gin request")
+		ev.Msg("http access")
 	}
 }

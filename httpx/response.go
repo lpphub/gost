@@ -1,10 +1,10 @@
 package httpx
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/lpphub/gost/errs"
 )
 
 type Result struct {
@@ -33,52 +33,12 @@ func Fail(ctx *gin.Context, err error) {
 		return
 	}
 
-	if bizErr, ok := errors.AsType[*Error](err); ok {
-		failWithBizErr(ctx, bizErr)
-		return
-	}
+	_ = ctx.Error(err)
 
-	fail(ctx, http.StatusOK, -1, err.Error())
-}
-
-func failWithBizErr(ctx *gin.Context, err *Error) {
-	status := err.HTTPStatus
-	if status == 0 {
-		status = http.StatusOK
-	}
-
-	fail(ctx, status, err.Code, err.Message)
-}
-
-func fail(ctx *gin.Context, httpStatus int, code int, msg string) {
-	ctx.AbortWithStatusJSON(httpStatus, Result{
-		Code:    code,
-		Message: msg,
-	})
-}
-
-func FailWithData(ctx *gin.Context, err error, data any) {
-	if bizErr, ok := errors.AsType[*Error](err); ok {
-		failWithBizErrData(ctx, bizErr, data)
-		return
-	}
-
-	ctx.AbortWithStatusJSON(http.StatusOK, Result{
-		Code:    -1,
-		Message: err.Error(),
-		Data:    data,
-	})
-}
-
-func failWithBizErrData(ctx *gin.Context, err *Error, data any) {
-	status := err.HTTPStatus
-	if status == 0 {
-		status = http.StatusOK
-	}
-	ctx.AbortWithStatusJSON(status, Result{
-		Code:    err.Code,
-		Message: err.Message,
-		Data:    data,
+	e := errs.Normalize(err)
+	ctx.AbortWithStatusJSON(e.Status(), Result{
+		Code:    e.Code(),
+		Message: e.Message(),
 	})
 }
 
