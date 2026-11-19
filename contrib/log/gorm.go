@@ -48,7 +48,7 @@ func (l *GORMLogger) LogMode(level gmlog.LogLevel) gmlog.Interface {
 	return &GORMLogger{cfg: cfg}
 }
 
-func (l *GORMLogger) Info(ctx context.Context, msg string, data ...interface{}) {
+func (l *GORMLogger) Info(ctx context.Context, msg string, data ...any) {
 	ev := l.event(ctx, zerolog.InfoLevel)
 	if ev == nil {
 		return
@@ -56,7 +56,7 @@ func (l *GORMLogger) Info(ctx context.Context, msg string, data ...interface{}) 
 	ev.Msg(fmt.Sprintf(msg, data...))
 }
 
-func (l *GORMLogger) Warn(ctx context.Context, msg string, data ...interface{}) {
+func (l *GORMLogger) Warn(ctx context.Context, msg string, data ...any) {
 	ev := l.event(ctx, zerolog.WarnLevel)
 	if ev == nil {
 		return
@@ -64,7 +64,7 @@ func (l *GORMLogger) Warn(ctx context.Context, msg string, data ...interface{}) 
 	ev.Msg(fmt.Sprintf(msg, data...))
 }
 
-func (l *GORMLogger) Error(ctx context.Context, msg string, data ...interface{}) {
+func (l *GORMLogger) Error(ctx context.Context, msg string, data ...any) {
 	ev := l.event(ctx, zerolog.ErrorLevel)
 	if ev == nil {
 		return

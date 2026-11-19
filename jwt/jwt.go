@@ -86,7 +86,7 @@ func (m *Manager) GenerateTokenPair(userID uint) (*TokenPair, error) {
 }
 
 func (m *Manager) ParseToken(tokenString string, expected ...TokenType) (*Claims, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(*jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(*jwt.Token) (any, error) {
 		return m.secret, nil
 	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
 	if err != nil {
